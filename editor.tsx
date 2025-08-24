@@ -5,6 +5,7 @@ import {
   JdmConfigProvider,
   type DecisionGraphType
 } from '@gorules/jdm-editor';
+import '@gorules/jdm-editor/dist/style.css';
 
 const App = () => {
   const [graph, setGraph] = useState<DecisionGraphType | undefined>();
