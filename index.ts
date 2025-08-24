@@ -75,8 +75,8 @@ Bun.serve({
       });
     }
 
-    // List all rule names
-    if (req.method === 'GET' && url.pathname === '/rules') {
+    // List all rule names (support trailing slash)
+    if (req.method === 'GET' && (url.pathname === '/rules' || url.pathname === '/rules/')) {
       const rows = db.query(`SELECT DISTINCT id FROM rulesets ORDER BY id`).all() as any[];
       return new Response(JSON.stringify(rows.map((r) => r.id)), {
         headers: { 'Content-Type': 'application/json' }
