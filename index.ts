@@ -40,12 +40,19 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
 
-    // Serve simple JDM editor
+    // Serve editor assets
     if (req.method === 'GET' && url.pathname === '/editor') {
       const file = Bun.file('public/editor.html');
-      return new Response(file, {
-        headers: { 'Content-Type': 'text/html' }
-      });
+      return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+    }
+
+    if (req.method === 'GET' && (url.pathname === '/editor.js' || url.pathname === '/editor.css')) {
+      const path = `public${url.pathname}`;
+      const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
+      const file = Bun.file(path);
+      if (await file.exists()) {
+        return new Response(file, { headers: { 'Content-Type': type } });
+      }
     }
 
     // Publish ruleset
