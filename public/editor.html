@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>JDM Editor</title>
+</head>
+<body>
+  <h1>JDM Editor</h1>
+  <label>Rule ID: <input id="ruleId" value="shipping" /></label><br />
+  <label>Status:
+    <select id="status">
+      <option value="active">active</option>
+      <option value="draft">draft</option>
+      <option value="archived">archived</option>
+    </select>
+  </label><br />
+  <textarea id="jdm" rows="20" cols="80">{"meta":{},"rules":[]}</textarea><br />
+  <button id="publish">Publish</button>
+  <script>
+    document.getElementById('publish').onclick = async () => {
+      try {
+        const id = document.getElementById('ruleId').value;
+        const status = document.getElementById('status').value;
+        const jdm = JSON.parse(document.getElementById('jdm').value);
+        const res = await fetch('/rulesets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, status, jdm })
+        });
+        if (res.ok) {
+          alert('Rule saved');
+        } else {
+          alert('Error saving rule');
+        }
+      } catch (err) {
+        alert(err);
+      }
+    };
+  </script>
+</body>
+</html>
