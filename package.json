@@ -1,0 +1,22 @@
+{
+  "name": "zen-proof-of-concept",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build:editor": "node fix-zen-wasm.js && bun build editor.tsx --outdir public",
+    "postinstall": "node fix-zen-wasm.js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@gorules/jdm-editor": "^1.45.0",
+    "@gorules/zen-engine": "^0.48.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
