@@ -10,20 +10,24 @@ import '@gorules/jdm-editor/dist/style.css';
 const exampleGraph: DecisionGraphType = {
   nodes: [
     {
-      id: 'input1',
+      id: 'start',
       type: 'inputNode',
       name: 'Start',
       position: { x: 100, y: 100 },
       content: null
     },
     {
-      id: 'expr1',
+      id: 'tariff',
       type: 'expressionNode',
-      name: 'Is adult?',
+      name: 'Calc tariff',
       position: { x: 400, y: 100 },
       content: {
         expressions: [
-          { id: 'exp1', key: 'isAdult', value: 'input.age >= 18' }
+          {
+            id: 'exp1',
+            key: 'tariff',
+            value: "input.country !== 'US' ? input.value * 0.05 : 0"
+          }
         ],
         passThrough: false,
         inputField: null,
@@ -32,16 +36,36 @@ const exampleGraph: DecisionGraphType = {
       }
     },
     {
-      id: 'output1',
+      id: 'cost',
+      type: 'expressionNode',
+      name: 'Shipping cost',
+      position: { x: 700, y: 100 },
+      content: {
+        expressions: [
+          {
+            id: 'exp2',
+            key: 'shippingCost',
+            value: 'input.weight * 1.5 + tariff'
+          }
+        ],
+        passThrough: false,
+        inputField: null,
+        outputPath: null,
+        executionMode: 'single'
+      }
+    },
+    {
+      id: 'output',
       type: 'outputNode',
       name: 'Result',
-      position: { x: 700, y: 100 },
+      position: { x: 1000, y: 100 },
       content: null
     }
   ],
   edges: [
-    { id: 'edge1', type: 'edge', sourceId: 'input1', targetId: 'expr1' },
-    { id: 'edge2', type: 'edge', sourceId: 'expr1', targetId: 'output1' }
+    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'tariff' },
+    { id: 'e2', type: 'edge', sourceId: 'tariff', targetId: 'cost' },
+    { id: 'e3', type: 'edge', sourceId: 'cost', targetId: 'output' }
   ]
 };
 
@@ -49,6 +73,7 @@ const App = () => {
   const [graph, setGraph] = useState<DecisionGraphType | undefined>(exampleGraph);
   const [id, setId] = useState('shipping');
   const [status, setStatus] = useState('draft');
+  const [version, setVersion] = useState('');
 
   const publish = async () => {
     await fetch('/rulesets', {
@@ -57,6 +82,18 @@ const App = () => {
       body: JSON.stringify({ id, status, jdm: graph })
     });
     alert('Rule saved');
+  };
+
+  const load = async () => {
+    const key = version ? `${id}@${version}` : `${id}@latest`;
+    const res = await fetch(`/rules/${encodeURIComponent(key)}`);
+    if (res.ok) {
+      const data = await res.json();
+      setGraph(data as any);
+      alert('Rule loaded');
+    } else {
+      alert('Rule not found');
+    }
   };
 
   return (
@@ -78,6 +115,15 @@ const App = () => {
           <input value={id} onChange={(e) => setId(e.target.value)} />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.9rem' }}>
+          Version
+          <input
+            value={version}
+            placeholder="latest"
+            onChange={(e) => setVersion(e.target.value)}
+            style={{ width: '5rem' }}
+          />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.9rem' }}>
           Status
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="active">active</option>
@@ -85,6 +131,7 @@ const App = () => {
             <option value="archived">archived</option>
           </select>
         </label>
+        <button onClick={load}>Load</button>
         <button onClick={publish}>Publish</button>
       </div>
     </JdmConfigProvider>

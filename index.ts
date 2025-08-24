@@ -75,9 +75,25 @@ Bun.serve({
       });
     }
 
-    // Retrieve JDM by key, e.g. /rules/shipping@latest
+    // List all rule names
+    if (req.method === 'GET' && url.pathname === '/rules') {
+      const rows = db.query(`SELECT DISTINCT id FROM rulesets ORDER BY id`).all() as any[];
+      return new Response(JSON.stringify(rows.map((r) => r.id)), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Retrieve JDM or version metadata
     if (req.method === 'GET' && url.pathname.startsWith('/rules/')) {
       const key = decodeURIComponent(url.pathname.slice('/rules/'.length));
+      if (!key.includes('@')) {
+        const rows = db
+          .query(`SELECT version, status, created_at FROM rulesets WHERE id = ? ORDER BY version DESC`)
+          .all(key) as any[];
+        return new Response(JSON.stringify(rows), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
       try {
         const bytes = await loadJdm(key);
         return new Response(bytes, {

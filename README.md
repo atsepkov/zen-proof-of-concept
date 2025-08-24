@@ -9,10 +9,13 @@ craft JDM documents in the browser and publish them to a local SQLite database.
 
 ## Endpoints
 
-- `GET /editor` – React JDM editor that publishes rules to a local SQLite database.
+- `GET /editor` – React JDM editor prefilled with a sample shipping rule. It can
+  load existing rules and publish updates to a local SQLite database.
 - `POST /rulesets` – backend endpoint used by the editor to save rules. Versions
   are automatically incremented.
-- `GET /rules/:key` – fetch a rule by key such as `shipping@latest` or
+- `GET /rules` – list all available rule IDs.
+- `GET /rules/<id>` – list versions for a rule with creation dates and status.
+- `GET /rules/<id>@<ver>` – fetch a rule by key such as `shipping@latest` or
   `shipping@42`.
 
 ## Running
