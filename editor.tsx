@@ -31,22 +31,11 @@ const exampleGraph: DecisionGraphType = {
     },
     {
       id: 'base',
-      type: 'decisionTableNode',
+      type: 'functionNode',
       name: 'Base Rate',
       position: { x: 400, y: 100 },
       content: {
-        hitPolicy: 'first',
-        rules: [
-          { i1: '< 5', o1: '5' },
-          { i1: '[5..10]', o1: '8' },
-          { i1: '> 10', o1: '12' }
-        ],
-        inputs: [{ id: 'i1', name: 'Weight', field: 'weight' }],
-        outputs: [{ id: 'o1', name: 'Base', field: 'base' }],
-        passThrough: true,
-        inputField: null,
-        outputPath: null,
-        executionMode: 'single'
+        source: `({ weight }) => ({ base: weight <= 5 ? 5 : weight <= 10 ? 8 : 12 })`
       }
     },
     {
