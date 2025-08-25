@@ -89,7 +89,23 @@ const App = () => {
     const res = await fetch(`/rules/${encodeURIComponent(key)}`);
     if (res.ok) {
       const data = await res.json();
-      setGraph(data as any);
+      const graphData = data as any;
+      const baseNode = graphData?.nodes?.find((n: any) => n.id === 'base');
+      if (baseNode && baseNode.content) {
+        baseNode.content = {
+          passThrough: false,
+          inputField: null,
+          outputPath: null,
+          executionMode: 'single',
+          ...baseNode.content
+        };
+        if (Array.isArray(baseNode.content.rules)) {
+          baseNode.content.rules = baseNode.content.rules.map((r: any) =>
+            structuredClone(r)
+          );
+        }
+      }
+      setGraph(graphData);
       alert('Rule loaded');
     } else {
       alert('Rule not found');
