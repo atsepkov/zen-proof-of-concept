@@ -28,7 +28,15 @@ const loadJdm = async (key: string) => {
       .get(id, Number(ver)) as any;
   }
   if (!row) throw new Error(`JDM not found for ${key}`);
-  return Buffer.from(row.jdm, 'utf8');
+  const jdm = JSON.parse(row.jdm);
+  if (Array.isArray(jdm.nodes)) {
+    for (const node of jdm.nodes) {
+      if (node.type === 'inputNode' && (!node.content || typeof node.content !== 'object')) {
+        node.content = { fields: [] };
+      }
+    }
+  }
+  return Buffer.from(JSON.stringify(jdm), 'utf8');
 };
 
 // Zen engine instance with loader pulling JDM from SQLite
