@@ -33,13 +33,23 @@ const exampleGraph: DecisionGraphType = {
       id: 'base',
       type: 'expressionNode',
       name: 'Base Rate',
-      position: { x: 400, y: 100 },
+      position: { x: 340, y: 100 },
       content: {
         expressions: [
           {
             id: 'e1',
             key: 'base',
             value: 'weight <= 5 ? 5 : weight <= 10 ? 8 : 12'
+          },
+          {
+            id: 'b9333d19-ad3b-4c76-a623-f8ab9fe863b1',
+            key: 'tariff_rate',
+            value: "origin_country != 'US' ? origin_country == 'CN' ? 0.3 : 0.15 : 0"
+          },
+          {
+            id: '35c7209d-6ef7-4f3f-b245-cab68a733dc4',
+            key: '',
+            value: ''
           }
         ],
         passThrough: true,
@@ -49,26 +59,23 @@ const exampleGraph: DecisionGraphType = {
       }
     },
     {
-      id: 'intl',
-      type: 'switchNode',
-      name: 'International?',
-      position: { x: 700, y: 100 },
-      content: {
-        hitPolicy: 'first',
-        statements: [
-          { id: 's1', condition: "origin_country != 'US'", isDefault: false },
-          { id: 's2', condition: '', isDefault: true }
-        ]
-      }
-    },
-    {
       id: 'tariff',
       type: 'expressionNode',
       name: 'Tariff',
-      position: { x: 1000, y: 40 },
+      position: { x: 580, y: 100 },
       content: {
         expressions: [
-          { id: 'e1', key: 'tariff', value: 'cost * 0.15' }
+          {
+            id: 'e332633e-044b-4c16-94e4-0c670817f755',
+            key: 'shipping',
+            value: 'base + weight * 2'
+          },
+          { id: 'e1', key: 'tariff', value: 'cost * tariff_rate' },
+          {
+            id: '45e10f1b-f273-4eb2-b07e-ad170b368dd2',
+            key: 'total',
+            value: '(weight * 5) + cost * (1 + tariff_rate)'
+          }
         ],
         passThrough: true,
         inputField: null,
@@ -77,39 +84,34 @@ const exampleGraph: DecisionGraphType = {
       }
     },
     {
-      id: 'total',
-      type: 'functionNode',
-      name: 'Total Cost',
-      position: { x: 1000, y: 180 },
-      content: {
-        source: `export default ({ cost, base, tariff }) => {
-  const total = Number(base) + cost * 0.1 + (tariff || 0);
-  const res = { shippingCost: total };
-  if (tariff) res.tariff = tariff;
-  return res;
-}`
-      }
-    },
-    {
       id: 'output',
       type: 'outputNode',
       name: 'Result',
-      position: { x: 1300, y: 100 },
+      position: { x: 865, y: 100 },
       content: {}
     }
   ],
   edges: [
     { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'base' },
-    { id: 'e2', type: 'edge', sourceId: 'base', targetId: 'intl' },
-    { id: 'e3', type: 'edge', sourceId: 'intl', sourceHandle: 's1', targetId: 'tariff' },
-    { id: 'e4', type: 'edge', sourceId: 'tariff', targetId: 'total' },
-    { id: 'e5', type: 'edge', sourceId: 'intl', sourceHandle: 's2', targetId: 'total' },
-    { id: 'e6', type: 'edge', sourceId: 'total', targetId: 'output' }
+    {
+      id: '7dfe0558-aeb3-4b11-8bfd-85451378c501',
+      sourceId: 'base',
+      type: 'edge',
+      targetId: 'tariff'
+    },
+    {
+      id: '3f83a9de-7650-4d11-bcf6-5362186cd188',
+      sourceId: 'tariff',
+      type: 'edge',
+      targetId: 'output'
+    }
   ]
 };
 
 const App = () => {
-  const [graph, setGraph] = useState<DecisionGraphType | undefined>(clone(exampleGraph));
+  const [graph, setGraph] = useState<DecisionGraphType | undefined>(
+    clone(exampleGraph)
+  );
   const [id, setId] = useState('shipping');
   const [status, setStatus] = useState('draft');
   const [version, setVersion] = useState('');
