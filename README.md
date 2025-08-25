@@ -9,6 +9,9 @@ craft JDM documents in the browser and publish them to a local SQLite database.
 The `/analyze` endpoint showcases executing the rules against generated test
 data using Zen Engine.
 
+## Architecture
+![Architecture](zen-poc.png)
+
 ## Endpoints
 
 - `GET /editor` – React JDM editor prefilled with a sample shipping rule using
