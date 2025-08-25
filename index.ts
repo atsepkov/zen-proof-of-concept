@@ -15,24 +15,29 @@ CREATE TABLE IF NOT EXISTS rulesets (
 CREATE INDEX IF NOT EXISTS rulesets_active_idx ON rulesets(id, status, version);
 `);
 
-const loadJdm = async (key: string) => {
-  const [id, ver] = key.split('@');
-  let row: { jdm: string } | undefined;
-  if (ver === 'latest') {
-    row = db
-      .query(`SELECT jdm FROM rulesets WHERE id = ? AND status = 'active' ORDER BY version DESC LIMIT 1`)
-      .get(id) as any;
-  } else {
-    row = db
-      .query(`SELECT jdm FROM rulesets WHERE id = ? AND version = ?`)
-      .get(id, Number(ver)) as any;
-  }
-  if (!row) throw new Error(`JDM not found for ${key}`);
-  return Buffer.from(row.jdm, 'utf8');
-};
+const loader = async (key: string) => {
+    // support keys like "shipping@latest" or "shipping@42"
+    const [id, ver] = key.split('@');
+    let row;
+    if (ver === 'latest') {
+      row = db.prepare(`
+        SELECT jdm FROM rulesets
+        WHERE id = ? AND status = 'active'
+        ORDER BY version DESC LIMIT 1
+      `).get(id);
+    } else {
+      row = db.prepare(`
+        SELECT jdm FROM rulesets
+        WHERE id = ? AND version = ?
+      `).get(id, Number(ver));
+    }
+    if (!row) throw new Error(`JDM not found for ${key}`);
+    // Return raw JSON bytes; ZEN will parse them.
+    return Buffer.from(row.jdm, 'utf8');
+  };
 
 // Zen engine instance with loader pulling JDM from SQLite
-const engine = new ZenEngine({ loader: loadJdm });
+const engine = new ZenEngine({ loader });
 
 // HTTP server
 Bun.serve({
@@ -110,7 +115,7 @@ Bun.serve({
         });
       }
       try {
-        const bytes = await loadJdm(key);
+        const bytes = await loader(key);
         return new Response(bytes, {
           headers: { 'Content-Type': 'application/json' }
         });
