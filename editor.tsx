@@ -15,7 +15,7 @@ const exampleGraph: DecisionGraphType = {
       name: 'Start',
       position: { x: 100, y: 100 },
       content: {
-        fields: [{ id: 'f1', key: 'weight', type: 'number', name: 'Weight' }],
+        fields: [{ id: 'f1', key: 'cost', type: 'number', name: 'Cost' }],
       },
     },
     {
@@ -24,7 +24,7 @@ const exampleGraph: DecisionGraphType = {
       name: 'Shipping cost',
       position: { x: 400, y: 100 },
       content: {
-        expressions: [{ id: 'exp1', key: 'shippingCost', value: 'weight * 1.5' }],
+        expressions: [{ id: 'exp1', key: 'shippingCost', value: 'cost * 0.1' }],
         passThrough: false,
         inputField: null,
         outputPath: null,

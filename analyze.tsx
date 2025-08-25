@@ -10,7 +10,10 @@ interface PropDef {
 const App = () => {
   const [rule, setRule] = useState('shipping@latest');
   const [count, setCount] = useState(5);
-  const [props, setProps] = useState<PropDef[]>([{ name: 'weight', min: 1, max: 10 }]);
+  const [props, setProps] = useState<PropDef[]>([
+    { name: 'weight', min: 1, max: 10 },
+    { name: 'cost', min: 10, max: 100 }
+  ]);
   const [parts, setParts] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
 
