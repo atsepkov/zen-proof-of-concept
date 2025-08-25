@@ -107,8 +107,10 @@ const exampleGraph: DecisionGraphType = {
   ]
 };
 
+const clone = <T,>(val: T): T => structuredClone(val);
+
 const App = () => {
-  const [graph, setGraph] = useState<DecisionGraphType | undefined>(exampleGraph);
+  const [graph, setGraph] = useState<DecisionGraphType | undefined>(clone(exampleGraph));
   const [id, setId] = useState('shipping');
   const [status, setStatus] = useState('draft');
   const [version, setVersion] = useState('');
@@ -127,7 +129,7 @@ const App = () => {
     const res = await fetch(`/rules/${encodeURIComponent(key)}`);
     if (res.ok) {
       const data = await res.json();
-      setGraph(data as any);
+      setGraph(clone(data as any));
       alert('Rule loaded');
     } else {
       alert('Rule not found');
@@ -137,7 +139,7 @@ const App = () => {
   return (
     <JdmConfigProvider>
       <div style={{ height: '80vh' }}>
-        <DecisionGraph value={graph} onChange={(val) => setGraph(val as any)} />
+        <DecisionGraph value={graph} onChange={(val) => setGraph(clone(val as any))} />
       </div>
       <div
         style={{
