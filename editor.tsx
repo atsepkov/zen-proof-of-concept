@@ -7,6 +7,8 @@ import {
 } from '@gorules/jdm-editor';
 import '@gorules/jdm-editor/dist/style.css';
 
+const clone = <T,>(val: T): T => JSON.parse(JSON.stringify(val));
+
 const exampleGraph: DecisionGraphType = {
   nodes: [
     {
@@ -40,7 +42,11 @@ const exampleGraph: DecisionGraphType = {
           { i1: '> 10', o1: '12' }
         ],
         inputs: [{ id: 'i1', name: 'Weight', field: 'weight' }],
-        outputs: [{ id: 'o1', name: 'Base', field: 'base' }]
+        outputs: [{ id: 'o1', name: 'Base', field: 'base' }],
+        passThrough: true,
+        inputField: null,
+        outputPath: null,
+        executionMode: 'single'
       }
     },
     {
@@ -102,7 +108,7 @@ const exampleGraph: DecisionGraphType = {
 };
 
 const App = () => {
-  const [graph, setGraph] = useState<DecisionGraphType | undefined>(exampleGraph);
+  const [graph, setGraph] = useState<DecisionGraphType | undefined>(clone(exampleGraph));
   const [id, setId] = useState('shipping');
   const [status, setStatus] = useState('draft');
   const [version, setVersion] = useState('');
@@ -121,7 +127,7 @@ const App = () => {
     const res = await fetch(`/rules/${encodeURIComponent(key)}`);
     if (res.ok) {
       const data = await res.json();
-      setGraph(data as any);
+      setGraph(clone(data as any));
       alert('Rule loaded');
     } else {
       alert('Rule not found');
@@ -131,7 +137,7 @@ const App = () => {
   return (
     <JdmConfigProvider>
       <div style={{ height: '80vh' }}>
-        <DecisionGraph value={graph} onChange={(val) => setGraph(val as any)} />
+        <DecisionGraph value={graph} onChange={(val) => setGraph(clone(val as any))} />
       </div>
       <div
         style={{
