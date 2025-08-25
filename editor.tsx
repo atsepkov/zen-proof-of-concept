@@ -15,16 +15,34 @@ const exampleGraph: DecisionGraphType = {
       name: 'Start',
       position: { x: 100, y: 100 },
       content: {
-        fields: [{ id: 'f1', key: 'cost', type: 'number', name: 'Cost' }],
+        fields: [
+          { id: 'f1', key: 'weight', type: 'number', name: 'Weight' },
+          { id: 'f2', key: 'cost', type: 'number', name: 'Cost' }
+        ]
+      },
+    },
+    {
+      id: 'tariff',
+      type: 'expressionNode',
+      name: 'Tariff',
+      position: { x: 400, y: 100 },
+      content: {
+        expressions: [{ id: 'exp1', key: 'tariff', value: 'weight * 0.05' }],
+        passThrough: true,
+        inputField: null,
+        outputPath: null,
+        executionMode: 'single',
       },
     },
     {
       id: 'cost',
       type: 'expressionNode',
       name: 'Shipping cost',
-      position: { x: 400, y: 100 },
+      position: { x: 700, y: 100 },
       content: {
-        expressions: [{ id: 'exp1', key: 'shippingCost', value: 'cost * 0.1' }],
+        expressions: [
+          { id: 'exp2', key: 'shippingCost', value: 'cost * 0.1 + tariff' }
+        ],
         passThrough: false,
         inputField: null,
         outputPath: null,
@@ -35,13 +53,14 @@ const exampleGraph: DecisionGraphType = {
       id: 'output',
       type: 'outputNode',
       name: 'Result',
-      position: { x: 700, y: 100 },
+      position: { x: 1000, y: 100 },
       content: {},
     },
   ],
   edges: [
-    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'cost' },
-    { id: 'e2', type: 'edge', sourceId: 'cost', targetId: 'output' },
+    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'tariff' },
+    { id: 'e2', type: 'edge', sourceId: 'tariff', targetId: 'cost' },
+    { id: 'e3', type: 'edge', sourceId: 'cost', targetId: 'output' },
   ],
 };
 

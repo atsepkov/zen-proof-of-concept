@@ -11,8 +11,9 @@ data using Zen Engine.
 
 ## Endpoints
 
-- `GET /editor` – React JDM editor prefilled with a sample shipping rule. It can
-  load existing rules and publish updates to a local SQLite database.
+- `GET /editor` – React JDM editor prefilled with a sample shipping rule that
+  computes a weight-based tariff and adds a cost surcharge. It can load existing
+  rules and publish updates to a local SQLite database.
 - `GET /analyze` – interactive page to generate sample parts and run them
   through a ruleset via Zen Engine. The analyzer inspects the rule's input
   fields to prefill compatible part properties.
