@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   DecisionGraph,
@@ -111,6 +111,7 @@ const clone = <T,>(val: T): T => structuredClone(val);
 
 const App = () => {
   const [graph, setGraph] = useState<DecisionGraphType | undefined>(clone(exampleGraph));
+  const memoGraph = useMemo(() => (graph ? clone(graph) : graph), [graph]);
   const [id, setId] = useState('shipping');
   const [status, setStatus] = useState('draft');
   const [version, setVersion] = useState('');
@@ -139,7 +140,7 @@ const App = () => {
   return (
     <JdmConfigProvider>
       <div style={{ height: '80vh' }}>
-        <DecisionGraph value={graph} onChange={(val) => setGraph(clone(val as any))} />
+        <DecisionGraph value={memoGraph} onChange={(val) => setGraph(clone(val as any))} />
       </div>
       <div
         style={{
