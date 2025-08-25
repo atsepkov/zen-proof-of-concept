@@ -17,51 +17,94 @@ const exampleGraph: DecisionGraphType = {
       content: {
         fields: [
           { id: 'f1', key: 'weight', type: 'number', name: 'Weight' },
-          { id: 'f2', key: 'cost', type: 'number', name: 'Cost' }
+          { id: 'f2', key: 'cost', type: 'number', name: 'Cost' },
+          {
+            id: 'f3',
+            key: 'origin_country',
+            type: 'string',
+            name: 'Origin Country'
+          }
         ]
-      },
+      }
+    },
+    {
+      id: 'base',
+      type: 'decisionTableNode',
+      name: 'Base Rate',
+      position: { x: 400, y: 100 },
+      content: {
+        hitPolicy: 'first',
+        rules: [
+          { i1: '< 5', o1: '5' },
+          { i1: '[5..10]', o1: '8' },
+          { i1: '> 10', o1: '12' }
+        ],
+        inputs: [{ id: 'i1', name: 'Weight', field: 'weight' }],
+        outputs: [{ id: 'o1', name: 'Base', field: 'base' }],
+        passThrough: true,
+        inputField: null,
+        outputPath: null,
+        executionMode: 'single'
+      }
+    },
+    {
+      id: 'intl',
+      type: 'switchNode',
+      name: 'International?',
+      position: { x: 700, y: 100 },
+      content: {
+        hitPolicy: 'first',
+        statements: [
+          { id: 's1', condition: "origin_country != 'US'", isDefault: false },
+          { id: 's2', condition: '', isDefault: true }
+        ]
+      }
     },
     {
       id: 'tariff',
       type: 'expressionNode',
       name: 'Tariff',
-      position: { x: 400, y: 100 },
+      position: { x: 1000, y: 40 },
       content: {
-        expressions: [{ id: 'exp1', key: 'tariff', value: 'weight * 0.05' }],
+        expressions: [{ id: 'ex1', key: 'tariff', value: 'cost * 0.15' }],
         passThrough: true,
         inputField: null,
         outputPath: null,
-        executionMode: 'single',
-      },
+        executionMode: 'single'
+      }
     },
     {
-      id: 'cost',
-      type: 'expressionNode',
-      name: 'Shipping cost',
-      position: { x: 700, y: 100 },
-      content: {
-        expressions: [
-          { id: 'exp2', key: 'shippingCost', value: 'cost * 0.1 + tariff' }
-        ],
-        passThrough: false,
-        inputField: null,
-        outputPath: null,
-        executionMode: 'single',
-      },
+      id: 'total',
+      type: 'functionNode',
+      name: 'Total Cost',
+      position: { x: 1000, y: 180 },
+      content: `const handler = ({ cost, base, tariff }) => {
+        try {
+          const total = Number(base) + cost * 0.1 + (tariff || 0);
+          const res = { shippingCost: total };
+          if (tariff) res.tariff = tariff;
+          return res;
+        } catch (err) {
+          return { error: err.message };
+        }
+      };`
     },
     {
       id: 'output',
       type: 'outputNode',
       name: 'Result',
-      position: { x: 1000, y: 100 },
-      content: {},
-    },
+      position: { x: 1300, y: 100 },
+      content: {}
+    }
   ],
   edges: [
-    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'tariff' },
-    { id: 'e2', type: 'edge', sourceId: 'tariff', targetId: 'cost' },
-    { id: 'e3', type: 'edge', sourceId: 'cost', targetId: 'output' },
-  ],
+    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'base' },
+    { id: 'e2', type: 'edge', sourceId: 'base', targetId: 'intl' },
+    { id: 'e3', type: 'edge', sourceId: 'intl', sourceHandle: 's1', targetId: 'tariff' },
+    { id: 'e4', type: 'edge', sourceId: 'tariff', targetId: 'total' },
+    { id: 'e5', type: 'edge', sourceId: 'intl', sourceHandle: 's2', targetId: 'total' },
+    { id: 'e6', type: 'edge', sourceId: 'total', targetId: 'output' }
+  ]
 };
 
 const App = () => {

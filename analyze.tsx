@@ -3,16 +3,23 @@ import { createRoot } from 'react-dom/client';
 
 interface PropDef {
   name: string;
-  min: number;
-  max: number;
+  type: 'number' | 'string';
+  min?: number;
+  max?: number;
+  values?: string[];
 }
 
 const App = () => {
   const [rule, setRule] = useState('shipping@latest');
   const [count, setCount] = useState(5);
   const [props, setProps] = useState<PropDef[]>([
-    { name: 'weight', min: 1, max: 10 },
-    { name: 'cost', min: 10, max: 100 }
+    { name: 'weight', type: 'number', min: 1, max: 10 },
+    { name: 'cost', type: 'number', min: 10, max: 100 },
+    {
+      name: 'origin_country',
+      type: 'string',
+      values: ['US', 'CN', 'MX', 'CA']
+    }
   ]);
   const [parts, setParts] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
@@ -21,7 +28,8 @@ const App = () => {
     setProps((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
   };
 
-  const addProp = () => setProps((p) => [...p, { name: '', min: 0, max: 0 }]);
+  const addProp = () =>
+    setProps((p) => [...p, { name: '', type: 'number', min: 0, max: 0 }]);
   const removeProp = (index: number) => setProps((p) => p.filter((_, i) => i !== index));
 
   useEffect(() => {
@@ -33,11 +41,20 @@ const App = () => {
         const input = jdm.nodes?.find((n: any) => n.type === 'inputNode');
         if (input?.content?.fields?.length) {
           setProps(
-            input.content.fields.map((f: any) => ({
-              name: f.key || f.name,
-              min: 0,
-              max: 10
-            }))
+            input.content.fields.map((f: any) =>
+              f.type === 'string'
+                ? {
+                    name: f.key || f.name,
+                    type: 'string',
+                    values: ['US', 'CN', 'MX', 'CA']
+                  }
+                : {
+                    name: f.key || f.name,
+                    type: 'number',
+                    min: 0,
+                    max: 10
+                  }
+            )
           );
         }
       } catch {
@@ -50,8 +67,15 @@ const App = () => {
     const arr = Array.from({ length: count }, () => {
       const obj: any = {};
       for (const p of props) {
-        const val = p.min + Math.random() * (p.max - p.min);
-        obj[p.name] = Number(val.toFixed(2));
+        if (p.type === 'string') {
+          const opts = p.values && p.values.length ? p.values : ['US'];
+          obj[p.name] = opts[Math.floor(Math.random() * opts.length)];
+        } else {
+          const min = p.min ?? 0;
+          const max = p.max ?? min;
+          const val = min + Math.random() * (max - min);
+          obj[p.name] = Number(val.toFixed(2));
+        }
       }
       return obj;
     });
@@ -93,25 +117,44 @@ const App = () => {
       <div>
         <h4>Properties</h4>
         {props.map((p, i) => (
-          <div key={i} style={{ marginBottom: '0.5rem' }}>
+          <div key={i} style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center' }}>
             <input
               placeholder="name"
               value={p.name}
               onChange={(e) => updateProp(i, 'name', e.target.value)}
               style={{ width: '6rem' }}
             />
-            <input
-              type="number"
-              value={p.min}
-              onChange={(e) => updateProp(i, 'min', Number(e.target.value))}
-              style={{ width: '5rem', marginLeft: '0.5rem' }}
-            />
-            <input
-              type="number"
-              value={p.max}
-              onChange={(e) => updateProp(i, 'max', Number(e.target.value))}
-              style={{ width: '5rem', marginLeft: '0.5rem' }}
-            />
+            <select
+              value={p.type}
+              onChange={(e) => updateProp(i, 'type', e.target.value as 'number' | 'string')}
+              style={{ marginLeft: '0.5rem' }}
+            >
+              <option value="number">number</option>
+              <option value="string">string</option>
+            </select>
+            {p.type === 'string' ? (
+              <input
+                placeholder="A,B,C"
+                value={(p.values || []).join(',')}
+                onChange={(e) => updateProp(i, 'values', e.target.value.split(',').map((v) => v.trim()))}
+                style={{ width: '8rem', marginLeft: '0.5rem' }}
+              />
+            ) : (
+              <>
+                <input
+                  type="number"
+                  value={p.min}
+                  onChange={(e) => updateProp(i, 'min', Number(e.target.value))}
+                  style={{ width: '5rem', marginLeft: '0.5rem' }}
+                />
+                <input
+                  type="number"
+                  value={p.max}
+                  onChange={(e) => updateProp(i, 'max', Number(e.target.value))}
+                  style={{ width: '5rem', marginLeft: '0.5rem' }}
+                />
+              </>
+            )}
             <button onClick={() => removeProp(i)} style={{ marginLeft: '0.5rem' }}>
               x
             </button>
