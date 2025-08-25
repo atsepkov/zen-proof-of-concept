@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
 interface PropDef {
@@ -20,6 +20,28 @@ const App = () => {
 
   const addProp = () => setProps((p) => [...p, { name: '', min: 0, max: 0 }]);
   const removeProp = (index: number) => setProps((p) => p.filter((_, i) => i !== index));
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/rules/${encodeURIComponent(rule)}`);
+        if (!res.ok) return;
+        const jdm = await res.json();
+        const input = jdm.nodes?.find((n: any) => n.type === 'inputNode');
+        if (input?.content?.fields?.length) {
+          setProps(
+            input.content.fields.map((f: any) => ({
+              name: f.key || f.name,
+              min: 0,
+              max: 10
+            }))
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [rule]);
 
   const generate = () => {
     const arr = Array.from({ length: count }, () => {
