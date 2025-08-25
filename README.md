@@ -7,6 +7,9 @@ The `/editor` endpoint hosts the React-based
 [`@gorules/jdm-editor`](https://github.com/gorules/jdm-editor) component to
 craft JDM documents in the browser and publish them to a local SQLite database.
 
+## Architecture
+![Architecture](zen-poc.png)
+
 ## Endpoints
 
 - `GET /editor` – React JDM editor prefilled with a sample shipping rule. It can
