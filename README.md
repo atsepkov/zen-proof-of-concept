@@ -15,9 +15,10 @@ data using Zen Engine.
   demonstrates a switch node for international logic and JavaScript functions
   for both base rate and error‑tolerant cost calculation. It can load existing
   rules and publish updates to a local SQLite database.
-- `GET /analyze` – interactive page to generate sample parts (including
-  `origin_country`) and run them through a ruleset via Zen Engine. The analyzer
-  inspects the rule's input fields to prefill compatible part properties.
+- `GET /analyze` – interactive page to define property ranges, generate sample
+  parts (including `origin_country`), and run them through a ruleset via Zen
+  Engine. The analyzer inspects the rule's input fields to prefill compatible
+  part properties.
 - `POST /rulesets` – backend endpoint used by the editor to save rules. Versions
   are automatically incremented.
 - `GET /rules` – list all available rule IDs.
