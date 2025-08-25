@@ -15,24 +15,29 @@ CREATE TABLE IF NOT EXISTS rulesets (
 CREATE INDEX IF NOT EXISTS rulesets_active_idx ON rulesets(id, status, version);
 `);
 
-const loadJdm = async (key: string) => {
-  const [id, ver] = key.split('@');
-  let row: { jdm: string } | undefined;
-  if (ver === 'latest') {
-    row = db
-      .query(`SELECT jdm FROM rulesets WHERE id = ? AND status = 'active' ORDER BY version DESC LIMIT 1`)
-      .get(id) as any;
-  } else {
-    row = db
-      .query(`SELECT jdm FROM rulesets WHERE id = ? AND version = ?`)
-      .get(id, Number(ver)) as any;
-  }
-  if (!row) throw new Error(`JDM not found for ${key}`);
-  return Buffer.from(row.jdm, 'utf8');
-};
+const loader = async (key: string) => {
+    // support keys like "shipping@latest" or "shipping@42"
+    const [id, ver] = key.split('@');
+    let row;
+    if (ver === 'latest') {
+      row = db.prepare(`
+        SELECT jdm FROM rulesets
+        WHERE id = ? AND status = 'active'
+        ORDER BY version DESC LIMIT 1
+      `).get(id);
+    } else {
+      row = db.prepare(`
+        SELECT jdm FROM rulesets
+        WHERE id = ? AND version = ?
+      `).get(id, Number(ver));
+    }
+    if (!row) throw new Error(`JDM not found for ${key}`);
+    // Return raw JSON bytes; ZEN will parse them.
+    return Buffer.from(row.jdm, 'utf8');
+  };
 
 // Zen engine instance with loader pulling JDM from SQLite
-const engine = new ZenEngine({ loader: loadJdm });
+const engine = new ZenEngine({ loader });
 
 // HTTP server
 Bun.serve({
@@ -47,6 +52,21 @@ Bun.serve({
     }
 
     if (req.method === 'GET' && (url.pathname === '/editor.js' || url.pathname === '/editor.css')) {
+      const path = `public${url.pathname}`;
+      const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
+      const file = Bun.file(path);
+      if (await file.exists()) {
+        return new Response(file, { headers: { 'Content-Type': type } });
+      }
+    }
+
+    // Serve analyze assets
+    if (req.method === 'GET' && url.pathname === '/analyze') {
+      const file = Bun.file('public/analyze.html');
+      return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+    }
+
+    if (req.method === 'GET' && (url.pathname === '/analyze.js' || url.pathname === '/analyze.css')) {
       const path = `public${url.pathname}`;
       const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
       const file = Bun.file(path);
@@ -95,12 +115,38 @@ Bun.serve({
         });
       }
       try {
-        const bytes = await loadJdm(key);
+        const bytes = await loader(key);
         return new Response(bytes, {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (err: any) {
         return new Response(String(err.message || err), { status: 404 });
+      }
+    }
+
+    // Analyze parts via Zen engine
+    if (req.method === 'POST' && url.pathname === '/analyze') {
+      try {
+        const body = await req.json();
+        const key = body.key as string;
+        const parts = body.parts as any[];
+        if (!key || !Array.isArray(parts)) {
+          return new Response('key and parts are required', { status: 400 });
+        }
+        const results = [] as any[];
+        for (const part of parts) {
+          try {
+            const res = await engine.evaluate(key, part);
+            results.push(res.result);
+          } catch (err: any) {
+            results.push({ error: err.message || String(err) });
+          }
+        }
+        return new Response(JSON.stringify(results), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (err: any) {
+        return new Response(String(err.message || err), { status: 500 });
       }
     }
 
