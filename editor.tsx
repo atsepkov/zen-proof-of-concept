@@ -31,11 +31,21 @@ const exampleGraph: DecisionGraphType = {
     },
     {
       id: 'base',
-      type: 'functionNode',
+      type: 'expressionNode',
       name: 'Base Rate',
       position: { x: 400, y: 100 },
       content: {
-        source: `({ weight }) => ({ base: weight <= 5 ? 5 : weight <= 10 ? 8 : 12 })`
+        expressions: [
+          {
+            id: 'e1',
+            key: 'base',
+            value: 'weight <= 5 ? 5 : weight <= 10 ? 8 : 12'
+          }
+        ],
+        passThrough: true,
+        inputField: null,
+        outputPath: null,
+        executionMode: 'single'
       }
     },
     {
@@ -53,11 +63,17 @@ const exampleGraph: DecisionGraphType = {
     },
     {
       id: 'tariff',
-      type: 'functionNode',
+      type: 'expressionNode',
       name: 'Tariff',
       position: { x: 1000, y: 40 },
       content: {
-        source: `({ cost }) => ({ tariff: cost * 0.15 })`
+        expressions: [
+          { id: 'e1', key: 'tariff', value: 'cost * 0.15' }
+        ],
+        passThrough: true,
+        inputField: null,
+        outputPath: null,
+        executionMode: 'single'
       }
     },
     {
@@ -66,15 +82,11 @@ const exampleGraph: DecisionGraphType = {
       name: 'Total Cost',
       position: { x: 1000, y: 180 },
       content: {
-        source: `({ cost, base, tariff }) => {
-  try {
-    const total = Number(base) + cost * 0.1 + (tariff || 0);
-    const res = { shippingCost: total };
-    if (tariff) res.tariff = tariff;
-    return res;
-  } catch (err) {
-    return { error: err.message };
-  }
+        source: `export default ({ cost, base, tariff }) => {
+  const total = Number(base) + cost * 0.1 + (tariff || 0);
+  const res = { shippingCost: total };
+  if (tariff) res.tariff = tariff;
+  return res;
 }`
       }
     },
