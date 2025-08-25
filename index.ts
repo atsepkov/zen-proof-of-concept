@@ -55,6 +55,21 @@ Bun.serve({
       }
     }
 
+    // Serve analyze assets
+    if (req.method === 'GET' && url.pathname === '/analyze') {
+      const file = Bun.file('public/analyze.html');
+      return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+    }
+
+    if (req.method === 'GET' && (url.pathname === '/analyze.js' || url.pathname === '/analyze.css')) {
+      const path = `public${url.pathname}`;
+      const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
+      const file = Bun.file(path);
+      if (await file.exists()) {
+        return new Response(file, { headers: { 'Content-Type': type } });
+      }
+    }
+
     // Publish ruleset
     if (req.method === 'POST' && url.pathname === '/rulesets') {
       const body = await req.json();
@@ -101,6 +116,28 @@ Bun.serve({
         });
       } catch (err: any) {
         return new Response(String(err.message || err), { status: 404 });
+      }
+    }
+
+    // Analyze parts via Zen engine
+    if (req.method === 'POST' && url.pathname === '/analyze') {
+      try {
+        const body = await req.json();
+        const key = body.key as string;
+        const parts = body.parts as any[];
+        if (!key || !Array.isArray(parts)) {
+          return new Response('key and parts are required', { status: 400 });
+        }
+        const results = [] as any[];
+        for (const part of parts) {
+          const res = await engine.evaluate(key, part);
+          results.push(res.result);
+        }
+        return new Response(JSON.stringify(results), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (err: any) {
+        return new Response(String(err.message || err), { status: 500 });
       }
     }
 
