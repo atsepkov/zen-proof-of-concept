@@ -130,8 +130,12 @@ Bun.serve({
         }
         const results = [] as any[];
         for (const part of parts) {
-          const res = await engine.evaluate(key, part);
-          results.push(res.result);
+          try {
+            const res = await engine.evaluate(key, part);
+            results.push(res.result);
+          } catch (err: any) {
+            results.push({ error: err.message || String(err) });
+          }
         }
         return new Response(JSON.stringify(results), {
           headers: { 'Content-Type': 'application/json' }

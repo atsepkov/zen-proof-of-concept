@@ -14,7 +14,7 @@ const exampleGraph: DecisionGraphType = {
       type: 'inputNode',
       name: 'Start',
       position: { x: 100, y: 100 },
-      content: null
+      content: {}
     },
     {
       id: 'tariff',
@@ -26,7 +26,7 @@ const exampleGraph: DecisionGraphType = {
           {
             id: 'exp1',
             key: 'tariff',
-            value: "input.country !== 'US' ? input.value * 0.05 : 0"
+            value: 'input.weight * 0.05'
           }
         ],
         passThrough: false,
@@ -59,7 +59,7 @@ const exampleGraph: DecisionGraphType = {
       type: 'outputNode',
       name: 'Result',
       position: { x: 1000, y: 100 },
-      content: null
+      content: {}
     }
   ],
   edges: [
