@@ -107,7 +107,11 @@ const exampleGraph: DecisionGraphType = {
   ]
 };
 
-const clone = <T,>(val: T): T => structuredClone(val);
+// Immer freezes the graph before passing it back via `onChange`, which makes
+// subsequent edits to the same object throw "object is not extensible" errors
+// inside the JDM editor. A JSON round‑trip ensures we always hand the editor a
+// fully mutable copy of the graph and strip any frozen property descriptors.
+const clone = <T,>(val: T): T => JSON.parse(JSON.stringify(val));
 
 const App = () => {
   const [graph, setGraph] = useState<DecisionGraphType | undefined>(clone(exampleGraph));
