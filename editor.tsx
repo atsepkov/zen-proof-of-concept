@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   DecisionGraph,
@@ -40,11 +40,7 @@ const exampleGraph: DecisionGraphType = {
           { i1: '> 10', o1: '12' }
         ],
         inputs: [{ id: 'i1', name: 'Weight', field: 'weight' }],
-        outputs: [{ id: 'o1', name: 'Base', field: 'base' }],
-        passThrough: true,
-        inputField: null,
-        outputPath: null,
-        executionMode: 'single'
+        outputs: [{ id: 'o1', name: 'Base', field: 'base' }]
       }
     },
     {
@@ -62,15 +58,11 @@ const exampleGraph: DecisionGraphType = {
     },
     {
       id: 'tariff',
-      type: 'expressionNode',
+      type: 'functionNode',
       name: 'Tariff',
       position: { x: 1000, y: 40 },
       content: {
-        expressions: [{ id: 'ex1', key: 'tariff', value: 'cost * 0.15' }],
-        passThrough: true,
-        inputField: null,
-        outputPath: null,
-        executionMode: 'single'
+        source: `({ cost }) => ({ tariff: cost * 0.15 })`
       }
     },
     {
@@ -78,16 +70,18 @@ const exampleGraph: DecisionGraphType = {
       type: 'functionNode',
       name: 'Total Cost',
       position: { x: 1000, y: 180 },
-      content: `const handler = ({ cost, base, tariff }) => {
-        try {
-          const total = Number(base) + cost * 0.1 + (tariff || 0);
-          const res = { shippingCost: total };
-          if (tariff) res.tariff = tariff;
-          return res;
-        } catch (err) {
-          return { error: err.message };
-        }
-      };`
+      content: {
+        source: `({ cost, base, tariff }) => {
+  try {
+    const total = Number(base) + cost * 0.1 + (tariff || 0);
+    const res = { shippingCost: total };
+    if (tariff) res.tariff = tariff;
+    return res;
+  } catch (err) {
+    return { error: err.message };
+  }
+}`
+      }
     },
     {
       id: 'output',
@@ -107,15 +101,8 @@ const exampleGraph: DecisionGraphType = {
   ]
 };
 
-// Immer freezes the graph before passing it back via `onChange`, which makes
-// subsequent edits to the same object throw "object is not extensible" errors
-// inside the JDM editor. A JSON round‑trip ensures we always hand the editor a
-// fully mutable copy of the graph and strip any frozen property descriptors.
-const clone = <T,>(val: T): T => JSON.parse(JSON.stringify(val));
-
 const App = () => {
-  const [graph, setGraph] = useState<DecisionGraphType | undefined>(clone(exampleGraph));
-  const memoGraph = useMemo(() => (graph ? clone(graph) : graph), [graph]);
+  const [graph, setGraph] = useState<DecisionGraphType | undefined>(exampleGraph);
   const [id, setId] = useState('shipping');
   const [status, setStatus] = useState('draft');
   const [version, setVersion] = useState('');
@@ -134,7 +121,7 @@ const App = () => {
     const res = await fetch(`/rules/${encodeURIComponent(key)}`);
     if (res.ok) {
       const data = await res.json();
-      setGraph(clone(data as any));
+      setGraph(data as any);
       alert('Rule loaded');
     } else {
       alert('Rule not found');
@@ -144,7 +131,7 @@ const App = () => {
   return (
     <JdmConfigProvider>
       <div style={{ height: '80vh' }}>
-        <DecisionGraph value={memoGraph} onChange={(val) => setGraph(clone(val as any))} />
+        <DecisionGraph value={graph} onChange={(val) => setGraph(val as any)} />
       </div>
       <div
         style={{
