@@ -39,13 +39,11 @@ const loader = async (key: string) => {
 // Zen engine instance with loader pulling JDM from SQLite
 const engine = new ZenEngine({ loader });
 
-// Heavy arithmetic rule to better stress the JS and Zen runtimes
-// Generate a very large arithmetic expression by offsetting the base input
-// and repeating the heavy calculation many times. Modulo keeps the number
-// bounded so decision branches still vary.
-const generateHeavyCalc = (iterations: number) => {
+// Heavy arithmetic rule to better stress the JS and Zen runtimes across many fields
+// Generate a very large arithmetic expression using a given variable name.
+const generateHeavyCalc = (iterations: number, variable = 'value') => {
   const piece = (offset: number) => {
-    const v = `(value + ${offset})`;
+    const v = `(${variable} + ${offset})`;
     return (
       `(((${v} * ${v} + ${v} / 3 - 4) * 2) % 97) + (${v} + 7) * (${v} - 3) - (${v} % 11) * 13 + ((${v} * 17) % 19) * 23 - ` +
       `(${v} + 5) * (${v} + 1)`
@@ -55,14 +53,14 @@ const generateHeavyCalc = (iterations: number) => {
   return `(${expr}) % 1000`;
 };
 
-const heavyCalc = generateHeavyCalc(50);
+// Heavy calculation thresholds reused across strategies
+const heavyCalcExpr = (variable: string) => generateHeavyCalc(3, variable);
 
-// Native JS implementation mirroring the expanded heavy rule
-const jsHeavy = (input: { value: number }) => {
-  const base = input.value;
+// Native JS implementation mirroring the heavy rule for a single value
+const jsHeavyValue = (value: number) => {
   let calc = 0;
-  for (let i = 0; i < 50; i++) {
-    const v = base + i;
+  for (let i = 0; i < 3; i++) {
+    const v = value + i;
     calc +=
       ((v * v + v / 3 - 4) * 2) % 97 +
       (v + 7) * (v - 3) -
@@ -74,80 +72,109 @@ const jsHeavy = (input: { value: number }) => {
   return calc > 666 ? 'high' : calc > 333 ? 'mid' : 'low';
 };
 
-// Zen expression decision performing the same heavy arithmetic
-const expressionDecision = engine.createDecision({
-  nodes: [
+// JS function evaluating the heavy rule across 100 properties
+const jsHeavyPart = (part: Record<string, number>) => {
+  const out: Record<string, string> = {};
+  for (let i = 0; i < 100; i++) {
+    const key = `p${i}`;
+    out[key] = jsHeavyValue(part[key]);
+  }
+  return out;
+};
+
+// Helper to build input field definitions for 100 numeric properties
+const inputFields = Array.from({ length: 100 }, (_, i) => ({
+  id: `p${i}`,
+  key: `p${i}`,
+  type: 'number',
+  name: `p${i}`
+}));
+
+// Build an expression decision that recomputes all properties sequentially
+const buildExpressionDecision = () => {
+  const nodes: any[] = [
     {
       id: 'start',
       type: 'inputNode',
       name: 'Start',
       position: { x: 0, y: 0 },
-      content: { fields: [{ id: 'value', key: 'value', type: 'number', name: 'value' }] }
-    },
-    {
-      id: 'expr',
+      content: { fields: inputFields }
+    }
+  ];
+  const edges: any[] = [];
+  for (let i = 0; i < 100; i++) {
+    const expr = heavyCalcExpr(`p${i}`);
+    nodes.push({
+      id: `expr${i}`,
       type: 'expressionNode',
-      name: 'Expr',
+      name: `Expr${i}`,
       position: { x: 0, y: 0 },
       content: {
         expressions: [
           {
-            id: 'res',
-            key: 'result',
-            value: `${heavyCalc} > 666 ? "high" : ${heavyCalc} > 333 ? "mid" : "low"`
+            id: `r${i}`,
+            key: `p${i}`,
+            value: `${expr} > 666 ? "high" : ${expr} > 333 ? "mid" : "low"`
           }
         ],
-        passThrough: false,
+        passThrough: true,
         inputField: null,
         outputPath: null,
         executionMode: 'single'
       }
-    },
-    { id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} }
-  ],
-  edges: [
-    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'expr' },
-    { id: 'e2', type: 'edge', sourceId: 'expr', targetId: 'out' }
-  ]
-});
+    });
+    const prev = i === 0 ? 'start' : `expr${i - 1}`;
+    edges.push({ id: `e${i}`, type: 'edge', sourceId: prev, targetId: `expr${i}` });
+  }
+  nodes.push({ id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} });
+  edges.push({ id: 'e_out', type: 'edge', sourceId: 'expr99', targetId: 'out' });
+  return engine.createDecision({ nodes, edges });
+};
 
-// Zen decision table evaluating the heavy rule via conditions
-const tableDecision = engine.createDecision({
-  nodes: [
+// Build a decision table graph that recomputes each property sequentially
+const buildTableDecision = () => {
+  const nodes: any[] = [
     {
       id: 'start',
       type: 'inputNode',
       name: 'Start',
       position: { x: 0, y: 0 },
-      content: { fields: [{ id: 'value', key: 'value', type: 'number', name: 'value' }] }
-    },
-    {
-      id: 'table',
+      content: { fields: inputFields }
+    }
+  ];
+  const edges: any[] = [];
+  const heavyValue = heavyCalcExpr('value');
+  for (let i = 0; i < 100; i++) {
+    nodes.push({
+      id: `table${i}`,
       type: 'decisionTableNode',
-      name: 'Table',
+      name: `Table${i}`,
       position: { x: 0, y: 0 },
       content: {
         hitPolicy: 'first',
         rules: [
-          { i1: `${heavyCalc} > 666`, o1: '"high"' },
-          { i1: `${heavyCalc} > 333`, o1: '"mid"' },
+          { i1: `${heavyValue} > 666`, o1: '"high"' },
+          { i1: `${heavyValue} > 333`, o1: '"mid"' },
           { i1: 'true', o1: '"low"' }
         ],
-        inputs: [{ id: 'i1', name: 'calc', field: '' }],
-        outputs: [{ id: 'o1', name: 'result', field: 'result' }],
-        passThrough: false,
+        inputs: [{ id: 'i1', name: 'val', field: `p${i}` }],
+        outputs: [{ id: 'o1', name: 'result', field: `p${i}` }],
+        passThrough: true,
         inputField: null,
         outputPath: null,
         executionMode: 'single'
       }
-    },
-    { id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} }
-  ],
-  edges: [
-    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'table' },
-    { id: 'e2', type: 'edge', sourceId: 'table', targetId: 'out' }
-  ]
-});
+    });
+    const prev = i === 0 ? 'start' : `table${i - 1}`;
+    edges.push({ id: `t${i}`, type: 'edge', sourceId: prev, targetId: `table${i}` });
+  }
+  nodes.push({ id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} });
+  edges.push({ id: 't_out', type: 'edge', sourceId: 'table99', targetId: 'out' });
+  return engine.createDecision({ nodes, edges });
+};
+
+const expressionDecision = buildExpressionDecision();
+const tableDecision = buildTableDecision();
 
 // HTTP server
 Bun.serve({
@@ -272,13 +299,17 @@ Bun.serve({
         : [10_000, 100_000];
       const results: Record<number, any> = {};
       for (const n of sizes) {
-        const data = Array.from({ length: n }, () => ({
-          value: Math.floor(Math.random() * 1000)
-        }));
+        const data = Array.from({ length: n }, () => {
+          const part: Record<string, number> = {};
+          for (let i = 0; i < 100; i++) {
+            part[`p${i}`] = Math.floor(Math.random() * 1000);
+          }
+          return part;
+        });
 
         let start = performance.now();
         for (const item of data) {
-          jsHeavy(item);
+          jsHeavyPart(item);
         }
         let end = performance.now();
         const jsTime = end - start;
