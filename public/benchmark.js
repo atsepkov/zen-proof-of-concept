@@ -23674,6 +23674,8 @@ var App = () => {
   const [logicLen, setLogicLen] = import_react.useState(3);
   const [parts, setParts] = import_react.useState([]);
   const [results, setResults] = import_react.useState(null);
+  const [history, setHistory] = import_react.useState([]);
+  const [running, setRunning] = import_react.useState(false);
   const generate = () => {
     const arr = Array.from({ length: partCount }, () => {
       const obj = {};
@@ -23684,8 +23686,10 @@ var App = () => {
     });
     setParts(arr);
     setResults(null);
+    setRunning(false);
   };
   const run = async () => {
+    setRunning(true);
     const res = await fetch("/benchmark", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -23693,6 +23697,11 @@ var App = () => {
     });
     const data = await res.json();
     setResults(data);
+    setHistory((h) => [
+      { ts: Date.now(), params: { propCount, partCount, logicLen }, ...data },
+      ...h
+    ]);
+    setRunning(false);
   };
   return /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
     style: { fontFamily: "sans-serif", padding: "1rem" },
@@ -23785,7 +23794,9 @@ var App = () => {
           }, undefined, true, undefined, this),
           /* @__PURE__ */ jsx_dev_runtime.jsxDEV("button", {
             onClick: run,
-            children: "Run Benchmark"
+            disabled: running,
+            style: { opacity: running ? 0.5 : 1 },
+            children: running ? "Running…" : "Run Benchmark"
           }, undefined, false, undefined, this)
         ]
       }, undefined, true, undefined, this),
@@ -23793,7 +23804,7 @@ var App = () => {
         style: { marginTop: "1rem" },
         children: [
           /* @__PURE__ */ jsx_dev_runtime.jsxDEV("h4", {
-            children: "Results"
+            children: "Latest Result"
           }, undefined, false, undefined, this),
           /* @__PURE__ */ jsx_dev_runtime.jsxDEV("p", {
             children: [
@@ -23816,6 +23827,34 @@ var App = () => {
               " ms"
             ]
           }, undefined, true, undefined, this)
+        ]
+      }, undefined, true, undefined, this),
+      history.length > 1 && /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
+        style: { marginTop: "1rem" },
+        children: [
+          /* @__PURE__ */ jsx_dev_runtime.jsxDEV("h4", {
+            children: "Previous Runs"
+          }, undefined, false, undefined, this),
+          /* @__PURE__ */ jsx_dev_runtime.jsxDEV("ul", {
+            children: history.slice(1).map((h) => /* @__PURE__ */ jsx_dev_runtime.jsxDEV("li", {
+              children: [
+                new Date(h.ts).toLocaleTimeString(),
+                ": ",
+                h.params.partCount,
+                " parts × ",
+                h.params.propCount,
+                " props, logic ",
+                h.params.logicLen,
+                "— JS ",
+                h.js.toFixed(3),
+                " ms, Expr ",
+                h.expression.toFixed(3),
+                " ms, Table ",
+                h.table.toFixed(3),
+                " ms"
+              ]
+            }, h.ts, true, undefined, this))
+          }, undefined, false, undefined, this)
         ]
       }, undefined, true, undefined, this)
     ]
