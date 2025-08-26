@@ -39,6 +39,125 @@ const loader = async (key: string) => {
 // Zen engine instance with loader pulling JDM from SQLite
 const engine = new ZenEngine({ loader });
 
+// Sample business logic used across benchmarks
+const jsLogic = (input: { a: number; b: number }) => {
+  const sum = input.a + input.b;
+  const category = sum > 1000 ? 'huge' : sum > 100 ? 'big' : 'small';
+  return { sum, category };
+};
+
+// Helper nodes/graphs for Zen variants
+const makeInputNode = () => ({
+  id: 'start',
+  type: 'inputNode',
+  name: 'Start',
+  position: { x: 0, y: 0 },
+  content: {
+    fields: [
+      { id: 'a', key: 'a', type: 'number', name: 'a' },
+      { id: 'b', key: 'b', type: 'number', name: 'b' }
+    ]
+  }
+});
+
+const makeOutputNode = () => ({
+  id: 'out',
+  type: 'outputNode',
+  name: 'Result',
+  position: { x: 0, y: 0 },
+  content: {}
+});
+
+const functionDecision = engine.createDecision({
+  nodes: [
+    makeInputNode(),
+    {
+      id: 'fn',
+      type: 'functionNode',
+      name: 'Fn',
+      position: { x: 0, y: 0 },
+      content:
+        'const handler = (input) => { const sum = input.a + input.b; const category = sum > 1000 ? "huge" : sum > 100 ? "big" : "small"; return { sum, category }; }'
+    },
+    makeOutputNode()
+  ],
+  edges: [
+    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'fn' },
+    { id: 'e2', type: 'edge', sourceId: 'fn', targetId: 'out' }
+  ]
+});
+
+const expressionDecision = engine.createDecision({
+  nodes: [
+    makeInputNode(),
+    {
+      id: 'expr',
+      type: 'expressionNode',
+      name: 'Expr',
+      position: { x: 0, y: 0 },
+      content: {
+        expressions: [
+          { id: 'e1', key: 'sum', value: 'a + b' },
+          {
+            id: 'e2',
+            key: 'category',
+            value:
+              'a + b > 1000 ? "huge" : a + b > 100 ? "big" : "small"'
+          }
+        ],
+        passThrough: true,
+        inputField: null,
+        outputPath: null,
+        executionMode: 'single'
+      }
+    },
+    makeOutputNode()
+  ],
+  edges: [
+    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'expr' },
+    { id: 'e2', type: 'edge', sourceId: 'expr', targetId: 'out' }
+  ]
+});
+
+const decisionTableDecision = engine.createDecision({
+  nodes: [
+    makeInputNode(),
+    {
+      id: 'table',
+      type: 'decisionTableNode',
+      name: 'Table',
+      position: { x: 0, y: 0 },
+      content: {
+        hitPolicy: 'first',
+        rules: [
+          { i1: 'a + b <= 100', o1: 'a + b', o2: '"small"' },
+          { i1: 'a + b <= 1000', o1: 'a + b', o2: '"big"' },
+          { i1: 'a + b > 1000', o1: 'a + b', o2: '"huge"' }
+        ],
+        inputs: [{ id: 'i1', name: 'total', field: '' }],
+        outputs: [
+          { id: 'o1', name: 'sum', field: 'sum' },
+          { id: 'o2', name: 'category', field: 'category' }
+        ],
+        passThrough: false,
+        inputField: null,
+        outputPath: null,
+        executionMode: 'single'
+      }
+    },
+    makeOutputNode()
+  ],
+  edges: [
+    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'table' },
+    { id: 'e2', type: 'edge', sourceId: 'table', targetId: 'out' }
+  ]
+});
+
+const passDecision = engine.createDecision({
+  nodes: [makeInputNode(), makeOutputNode()],
+  edges: [{ id: 'e1', type: 'edge', sourceId: 'start', targetId: 'out' }]
+});
+
 // HTTP server
 Bun.serve({
   port: 3000,
@@ -148,6 +267,67 @@ Bun.serve({
       } catch (err: any) {
         return new Response(String(err.message || err), { status: 500 });
       }
+    }
+
+    // Performance benchmark
+    if (req.method === 'GET' && url.pathname === '/benchmark') {
+      const sizesParam = url.searchParams.get('sizes');
+      const sizes = sizesParam
+        ? sizesParam.split(',').map((s) => Number(s)).filter((n) => n > 0)
+        : [10000, 100000];
+      const results: Record<number, any> = {};
+      for (const n of sizes) {
+        const data = Array.from({ length: n }, () => ({
+          a: Math.random() * 1000,
+          b: Math.random() * 1000
+        }));
+
+        let start = performance.now();
+        for (const item of data) {
+          jsLogic(item);
+        }
+        let end = performance.now();
+        const jsTime = end - start;
+
+        start = performance.now();
+        for (const item of data) {
+          await functionDecision.evaluate(item);
+        }
+        end = performance.now();
+        const fnTime = end - start;
+
+        start = performance.now();
+        for (const item of data) {
+          await expressionDecision.evaluate(item);
+        }
+        end = performance.now();
+        const exprTime = end - start;
+
+        start = performance.now();
+        for (const item of data) {
+          await decisionTableDecision.evaluate(item);
+        }
+        end = performance.now();
+        const tableTime = end - start;
+
+        start = performance.now();
+        for (const item of data) {
+          await passDecision.evaluate(item);
+        }
+        end = performance.now();
+        const passTime = end - start;
+
+        results[n] = {
+          js: jsTime,
+          function: fnTime,
+          expression: exprTime,
+          table: tableTime,
+          passthrough: passTime
+        };
+      }
+      return new Response(JSON.stringify(results), {
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     return new Response('Not found', { status: 404 });
