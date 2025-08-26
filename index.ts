@@ -161,6 +161,10 @@ const passDecision = engine.createDecision({
 // HTTP server
 Bun.serve({
   port: 3000,
+  // Allow long-running benchmark requests
+  // bun types may not yet include this option
+  // @ts-expect-error
+  idleTimeout: 240,
   async fetch(req) {
     const url = new URL(req.url);
 
@@ -274,7 +278,7 @@ Bun.serve({
       const sizesParam = url.searchParams.get('sizes');
       const sizes = sizesParam
         ? sizesParam.split(',').map((s) => Number(s)).filter((n) => n > 0)
-        : [10000, 100000];
+        : [10_000, 100_000];
       const results: Record<number, any> = {};
       for (const n of sizes) {
         const data = Array.from({ length: n }, () => ({
@@ -287,38 +291,36 @@ Bun.serve({
           jsLogic(item);
         }
         let end = performance.now();
-        const jsTime = end - start;
+        const jsSync = end - start;
 
         start = performance.now();
-        for (const item of data) {
-          await functionDecision.evaluate(item);
-        }
+        await Promise.all(data.map((item) => Promise.resolve(jsLogic(item))));
+        end = performance.now();
+        const jsAsync = end - start;
+
+        start = performance.now();
+        await Promise.all(data.map((item) => functionDecision.evaluate(item)));
         end = performance.now();
         const fnTime = end - start;
 
         start = performance.now();
-        for (const item of data) {
-          await expressionDecision.evaluate(item);
-        }
+        await Promise.all(data.map((item) => expressionDecision.evaluate(item)));
         end = performance.now();
         const exprTime = end - start;
 
         start = performance.now();
-        for (const item of data) {
-          await decisionTableDecision.evaluate(item);
-        }
+        await Promise.all(data.map((item) => decisionTableDecision.evaluate(item)));
         end = performance.now();
         const tableTime = end - start;
 
         start = performance.now();
-        for (const item of data) {
-          await passDecision.evaluate(item);
-        }
+        await Promise.all(data.map((item) => passDecision.evaluate(item)));
         end = performance.now();
         const passTime = end - start;
 
         results[n] = {
-          js: jsTime,
+          jsSync,
+          jsAsync,
           function: fnTime,
           expression: exprTime,
           table: tableTime,
