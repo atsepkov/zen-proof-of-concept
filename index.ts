@@ -309,28 +309,61 @@ Bun.serve({
             return new Response('parts are required', { status: 400 });
           }
 
-          const exprDecision = buildExpressionDecision(propCount, iterations);
-          const tableDecision = buildTableDecision(propCount, iterations);
-
+          // Build decisions and capture build time
           let start = performance.now();
+          const exprDecision = buildExpressionDecision(propCount, iterations);
+          let end = performance.now();
+          const exprBuild = end - start;
+
+          start = performance.now();
+          const tableDecision = buildTableDecision(propCount, iterations);
+          end = performance.now();
+          const tableBuild = end - start;
+
+          // Warm up decisions so compilation cost isn't measured
+          const warmExpr = { ...parts[0] };
+          start = performance.now();
+          await exprDecision.evaluate(warmExpr);
+          end = performance.now();
+          const exprCompile = end - start;
+
+          const warmTable = { ...parts[0] };
+          start = performance.now();
+          await tableDecision.evaluate(warmTable);
+          end = performance.now();
+          const tableCompile = end - start;
+
+          // JS baseline
+          start = performance.now();
           for (const item of parts) {
             jsHeavyPart(item, propCount, iterations);
           }
-          let end = performance.now();
+          end = performance.now();
           const jsTime = end - start;
 
+          // Evaluate decisions sequentially to reuse compiled logic
           start = performance.now();
-          await Promise.all(parts.map((p) => exprDecision.evaluate(p)));
+          for (const p of parts) {
+            await exprDecision.evaluate(p);
+          }
           end = performance.now();
           const exprTime = end - start;
 
           start = performance.now();
-          await Promise.all(parts.map((p) => tableDecision.evaluate(p)));
+          for (const p of parts) {
+            await tableDecision.evaluate(p);
+          }
           end = performance.now();
           const tableTime = end - start;
 
           return new Response(
-            JSON.stringify({ js: jsTime, expression: exprTime, table: tableTime }),
+            JSON.stringify({
+              js: jsTime,
+              expression: exprTime,
+              table: tableTime,
+              build: { expression: exprBuild, table: tableBuild },
+              compile: { expression: exprCompile, table: tableCompile }
+            }),
             { headers: { 'Content-Type': 'application/json' } }
           );
         } catch (err: any) {

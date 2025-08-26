@@ -23817,14 +23817,23 @@ var App = () => {
             children: [
               "Expression: ",
               results.expression.toFixed(3),
-              " ms"
+              " ms (build ",
+              results.build.expression.toFixed(3),
+              " ms, compile ",
+              results.compile.expression.toFixed(3),
+              " ms)"
             ]
           }, undefined, true, undefined, this),
           /* @__PURE__ */ jsx_dev_runtime.jsxDEV("p", {
             children: [
               "Table: ",
               results.table.toFixed(3),
-              " ms"
+              " ms (build ",
+              results.build.table.toFixed(3),
+              " ms, compile",
+              " ",
+              results.compile.table.toFixed(3),
+              " ms)"
             ]
           }, undefined, true, undefined, this)
         ]

@@ -109,8 +109,14 @@ const App = () => {
         <div style={{ marginTop: '1rem' }}>
           <h4>Latest Result</h4>
           <p>JS: {results.js.toFixed(3)} ms</p>
-          <p>Expression: {results.expression.toFixed(3)} ms</p>
-          <p>Table: {results.table.toFixed(3)} ms</p>
+          <p>
+            Expression: {results.expression.toFixed(3)} ms (build {results.build.expression.toFixed(3)} ms,
+            compile {results.compile.expression.toFixed(3)} ms)
+          </p>
+          <p>
+            Table: {results.table.toFixed(3)} ms (build {results.build.table.toFixed(3)} ms, compile{' '}
+            {results.compile.table.toFixed(3)} ms)
+          </p>
         </div>
       )}
       {history.length > 1 && (
