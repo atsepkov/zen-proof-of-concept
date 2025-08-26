@@ -313,6 +313,15 @@ Bun.serve({
         end = performance.now();
         const tableTime = end - start;
 
+        const batchSize = 1000;
+        start = performance.now();
+        for (let i = 0; i < data.length; i += batchSize) {
+          const slice = data.slice(i, i + batchSize);
+          await Promise.all(slice.map((item) => decisionTableDecision.evaluate(item)));
+        }
+        end = performance.now();
+        const tableBatchTime = end - start;
+
         start = performance.now();
         await Promise.all(data.map((item) => passDecision.evaluate(item)));
         end = performance.now();
@@ -324,6 +333,7 @@ Bun.serve({
           function: fnTime,
           expression: exprTime,
           table: tableTime,
+          tableBatch: tableBatchTime,
           passthrough: passTime
         };
       }
