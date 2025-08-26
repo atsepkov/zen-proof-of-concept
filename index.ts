@@ -39,26 +39,26 @@ const loader = async (key: string) => {
 // Zen engine instance with loader pulling JDM from SQLite
 const engine = new ZenEngine({ loader });
 
-// Generate a heavy rule mapping numbers to strings to stress evaluation time
-const CASES = 100;
+// Heavy arithmetic rule to better stress the JS and Zen runtimes
+const heavyCalc =
+  '((' +
+  '(((value * value + value / 3 - 4) * 2) % 97) + ((value + 7) * (value - 3))' +
+  ' - (value % 11) * 13 + ((value * 17) % 19) * 23 - ((value + 5) * (value + 1))' +
+  '))';
 
-// Native JS implementation using a large switch statement
-const switchCases = Array.from({ length: CASES }, (_, i) => `  case ${i}: return "v${i}";`).join('\n');
+// Native JS implementation of the heavy rule
+const jsHeavy = (input: { value: number }) => {
+  const v = input.value;
+  const calc =
+    (((v * v + v / 3 - 4) * 2) % 97) +
+    (v + 7) * (v - 3) -
+    (v % 11) * 13 +
+    ((v * 17) % 19) * 23 -
+    (v + 5) * (v + 1);
+  return calc > 1000 ? 'high' : calc > 500 ? 'mid' : 'low';
+};
 
-const jsSwitch = new Function(
-  'input',
-  `
-switch (input.value) {
-${switchCases}
-  default: return "other";
-}
-`
-) as (input: { value: number }) => string;
-
-// Zen expression decision mirroring the switch logic
-const exprBody =
-  Array.from({ length: CASES }, (_, i) => `value == ${i} ? "v${i}" :`).join(' ') + '"other"';
-
+// Zen expression decision performing the same heavy arithmetic
 const expressionDecision = engine.createDecision({
   nodes: [
     {
@@ -74,7 +74,13 @@ const expressionDecision = engine.createDecision({
       name: 'Expr',
       position: { x: 0, y: 0 },
       content: {
-        expressions: [{ id: 'res', key: 'result', value: exprBody }],
+        expressions: [
+          {
+            id: 'res',
+            key: 'result',
+            value: `${heavyCalc} > 1000 ? "high" : ${heavyCalc} > 500 ? "mid" : "low"`
+          }
+        ],
         passThrough: false,
         inputField: null,
         outputPath: null,
@@ -89,12 +95,7 @@ const expressionDecision = engine.createDecision({
   ]
 });
 
-// Zen decision table equivalent
-const tableRules = Array.from({ length: CASES }, (_, i) => ({
-  i1: `value == ${i}`,
-  o1: `"v${i}"`
-}));
-
+// Zen decision table evaluating the heavy rule via conditions
 const tableDecision = engine.createDecision({
   nodes: [
     {
@@ -111,8 +112,12 @@ const tableDecision = engine.createDecision({
       position: { x: 0, y: 0 },
       content: {
         hitPolicy: 'first',
-        rules: tableRules,
-        inputs: [{ id: 'i1', name: 'val', field: '' }],
+        rules: [
+          { i1: `${heavyCalc} > 1000`, o1: '"high"' },
+          { i1: `${heavyCalc} > 500`, o1: '"mid"' },
+          { i1: 'true', o1: '"low"' }
+        ],
+        inputs: [{ id: 'i1', name: 'calc', field: '' }],
         outputs: [{ id: 'o1', name: 'result', field: 'result' }],
         passThrough: false,
         inputField: null,
@@ -252,12 +257,12 @@ Bun.serve({
       const results: Record<number, any> = {};
       for (const n of sizes) {
         const data = Array.from({ length: n }, () => ({
-          value: Math.floor(Math.random() * CASES)
+          value: Math.floor(Math.random() * 1000)
         }));
 
         let start = performance.now();
         for (const item of data) {
-          jsSwitch(item);
+          jsHeavy(item);
         }
         let end = performance.now();
         const jsTime = end - start;
