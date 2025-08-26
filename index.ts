@@ -39,8 +39,7 @@ const loader = async (key: string) => {
 // Zen engine instance with loader pulling JDM from SQLite
 const engine = new ZenEngine({ loader });
 
-// Heavy arithmetic rule to better stress the JS and Zen runtimes across many fields
-// Generate a very large arithmetic expression using a given variable name.
+// Heavy arithmetic rule generator and helpers
 const generateHeavyCalc = (iterations: number, variable = 'value') => {
   const piece = (offset: number) => {
     const v = `(${variable} + ${offset})`;
@@ -53,13 +52,9 @@ const generateHeavyCalc = (iterations: number, variable = 'value') => {
   return `(${expr}) % 1000`;
 };
 
-// Heavy calculation thresholds reused across strategies
-const heavyCalcExpr = (variable: string) => generateHeavyCalc(3, variable);
-
-// Native JS implementation mirroring the heavy rule for a single value
-const jsHeavyValue = (value: number) => {
+const jsHeavyValue = (value: number, iterations: number) => {
   let calc = 0;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < iterations; i++) {
     const v = value + i;
     calc +=
       ((v * v + v / 3 - 4) * 2) % 97 +
@@ -72,26 +67,22 @@ const jsHeavyValue = (value: number) => {
   return calc > 666 ? 'high' : calc > 333 ? 'mid' : 'low';
 };
 
-// JS function evaluating the heavy rule across 100 properties
-const jsHeavyPart = (part: Record<string, number>) => {
+const jsHeavyPart = (part: Record<string, number>, propCount: number, iterations: number) => {
   const out: Record<string, string> = {};
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < propCount; i++) {
     const key = `p${i}`;
-    out[key] = jsHeavyValue(part[key]);
+    out[key] = jsHeavyValue(part[key], iterations);
   }
   return out;
 };
 
-// Helper to build input field definitions for 100 numeric properties
-const inputFields = Array.from({ length: 100 }, (_, i) => ({
-  id: `p${i}`,
-  key: `p${i}`,
-  type: 'number',
-  name: `p${i}`
-}));
-
-// Build an expression decision that recomputes all properties sequentially
-const buildExpressionDecision = () => {
+const buildExpressionDecision = (propCount: number, iterations: number) => {
+  const inputFields = Array.from({ length: propCount }, (_, i) => ({
+    id: `p${i}`,
+    key: `p${i}`,
+    type: 'number',
+    name: `p${i}`
+  }));
   const nodes: any[] = [
     {
       id: 'start',
@@ -102,8 +93,8 @@ const buildExpressionDecision = () => {
     }
   ];
   const edges: any[] = [];
-  for (let i = 0; i < 100; i++) {
-    const expr = heavyCalcExpr(`p${i}`);
+  for (let i = 0; i < propCount; i++) {
+    const expr = generateHeavyCalc(iterations, `p${i}`);
     nodes.push({
       id: `expr${i}`,
       type: 'expressionNode',
@@ -127,12 +118,17 @@ const buildExpressionDecision = () => {
     edges.push({ id: `e${i}`, type: 'edge', sourceId: prev, targetId: `expr${i}` });
   }
   nodes.push({ id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} });
-  edges.push({ id: 'e_out', type: 'edge', sourceId: 'expr99', targetId: 'out' });
+  edges.push({ id: 'e_out', type: 'edge', sourceId: `expr${propCount - 1}`, targetId: 'out' });
   return engine.createDecision({ nodes, edges });
 };
 
-// Build a decision table graph that recomputes each property sequentially
-const buildTableDecision = () => {
+const buildTableDecision = (propCount: number, iterations: number) => {
+  const inputFields = Array.from({ length: propCount }, (_, i) => ({
+    id: `p${i}`,
+    key: `p${i}`,
+    type: 'number',
+    name: `p${i}`
+  }));
   const nodes: any[] = [
     {
       id: 'start',
@@ -143,8 +139,8 @@ const buildTableDecision = () => {
     }
   ];
   const edges: any[] = [];
-  const heavyValue = heavyCalcExpr('value');
-  for (let i = 0; i < 100; i++) {
+  const heavyValue = generateHeavyCalc(iterations, 'value');
+  for (let i = 0; i < propCount; i++) {
     nodes.push({
       id: `table${i}`,
       type: 'decisionTableNode',
@@ -169,13 +165,9 @@ const buildTableDecision = () => {
     edges.push({ id: `t${i}`, type: 'edge', sourceId: prev, targetId: `table${i}` });
   }
   nodes.push({ id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} });
-  edges.push({ id: 't_out', type: 'edge', sourceId: 'table99', targetId: 'out' });
+  edges.push({ id: 't_out', type: 'edge', sourceId: `table${propCount - 1}`, targetId: 'out' });
   return engine.createDecision({ nodes, edges });
 };
-
-const expressionDecision = buildExpressionDecision();
-const tableDecision = buildTableDecision();
-
 // HTTP server
 Bun.serve({
   port: 3000,
@@ -201,20 +193,35 @@ Bun.serve({
       }
     }
 
-    // Serve analyze assets
-    if (req.method === 'GET' && url.pathname === '/analyze') {
-      const file = Bun.file('public/analyze.html');
-      return new Response(file, { headers: { 'Content-Type': 'text/html' } });
-    }
-
-    if (req.method === 'GET' && (url.pathname === '/analyze.js' || url.pathname === '/analyze.css')) {
-      const path = `public${url.pathname}`;
-      const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
-      const file = Bun.file(path);
-      if (await file.exists()) {
-        return new Response(file, { headers: { 'Content-Type': type } });
+      // Serve analyze assets
+      if (req.method === 'GET' && url.pathname === '/analyze') {
+        const file = Bun.file('public/analyze.html');
+        return new Response(file, { headers: { 'Content-Type': 'text/html' } });
       }
-    }
+
+      if (req.method === 'GET' && (url.pathname === '/analyze.js' || url.pathname === '/analyze.css')) {
+        const path = `public${url.pathname}`;
+        const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
+        const file = Bun.file(path);
+        if (await file.exists()) {
+          return new Response(file, { headers: { 'Content-Type': type } });
+        }
+      }
+
+      // Serve benchmark assets
+      if (req.method === 'GET' && url.pathname === '/benchmark') {
+        const file = Bun.file('public/benchmark.html');
+        return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+      }
+
+      if (req.method === 'GET' && (url.pathname === '/benchmark.js' || url.pathname === '/benchmark.css')) {
+        const path = `public${url.pathname}`;
+        const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
+        const file = Bun.file(path);
+        if (await file.exists()) {
+          return new Response(file, { headers: { 'Content-Type': type } });
+        }
+      }
 
     // Publish ruleset
     if (req.method === 'POST' && url.pathname === '/rulesets') {
@@ -291,45 +298,45 @@ Bun.serve({
       }
     }
 
-    // Performance benchmark
-    if (req.method === 'GET' && url.pathname === '/benchmark') {
-      const sizesParam = url.searchParams.get('sizes');
-      const sizes = sizesParam
-        ? sizesParam.split(',').map((s) => Number(s)).filter((n) => n > 0)
-        : [10_000, 100_000];
-      const results: Record<number, any> = {};
-      for (const n of sizes) {
-        const data = Array.from({ length: n }, () => {
-          const part: Record<string, number> = {};
-          for (let i = 0; i < 100; i++) {
-            part[`p${i}`] = Math.floor(Math.random() * 1000);
+      // Performance benchmark
+      if (req.method === 'POST' && url.pathname === '/benchmark') {
+        try {
+          const body = await req.json();
+          const parts = body.parts as any[];
+          const iterations = Number(body.iterations) || 1;
+          const propCount = Number(body.propCount) || (parts[0] ? Object.keys(parts[0]).length : 0);
+          if (!Array.isArray(parts) || propCount === 0) {
+            return new Response('parts are required', { status: 400 });
           }
-          return part;
-        });
 
-        let start = performance.now();
-        for (const item of data) {
-          jsHeavyPart(item);
+          const exprDecision = buildExpressionDecision(propCount, iterations);
+          const tableDecision = buildTableDecision(propCount, iterations);
+
+          let start = performance.now();
+          for (const item of parts) {
+            jsHeavyPart(item, propCount, iterations);
+          }
+          let end = performance.now();
+          const jsTime = end - start;
+
+          start = performance.now();
+          await Promise.all(parts.map((p) => exprDecision.evaluate(p)));
+          end = performance.now();
+          const exprTime = end - start;
+
+          start = performance.now();
+          await Promise.all(parts.map((p) => tableDecision.evaluate(p)));
+          end = performance.now();
+          const tableTime = end - start;
+
+          return new Response(
+            JSON.stringify({ js: jsTime, expression: exprTime, table: tableTime }),
+            { headers: { 'Content-Type': 'application/json' } }
+          );
+        } catch (err: any) {
+          return new Response(String(err.message || err), { status: 500 });
         }
-        let end = performance.now();
-        const jsTime = end - start;
-
-        start = performance.now();
-        await Promise.all(data.map((item) => expressionDecision.evaluate(item)));
-        end = performance.now();
-        const exprTime = end - start;
-
-        start = performance.now();
-        await Promise.all(data.map((item) => tableDecision.evaluate(item)));
-        end = performance.now();
-        const tableTime = end - start;
-
-        results[n] = { js: jsTime, expression: exprTime, table: tableTime };
       }
-      return new Response(JSON.stringify(results), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
 
     return new Response('Not found', { status: 404 });
   }

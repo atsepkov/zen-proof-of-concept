@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build:editor": "node fix-zen-wasm.js && bun build editor.tsx analyze.tsx --outdir public",
+    "build:editor": "node fix-zen-wasm.js && bun build editor.tsx analyze.tsx benchmark.tsx --outdir public",
     "postinstall": "node fix-zen-wasm.js"
   },
   "devDependencies": {
