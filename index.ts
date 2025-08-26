@@ -39,79 +39,49 @@ const loader = async (key: string) => {
 // Zen engine instance with loader pulling JDM from SQLite
 const engine = new ZenEngine({ loader });
 
-// Sample business logic used across benchmarks
-const jsLogic = (input: { a: number; b: number }) => {
-  const sum = input.a + input.b;
-  const category = sum > 1000 ? 'huge' : sum > 100 ? 'big' : 'small';
-  return { sum, category };
-};
+// Generate a heavy rule mapping numbers to strings to stress evaluation time
+const CASES = 100;
 
-// Helper nodes/graphs for Zen variants
-const makeInputNode = () => ({
-  id: 'start',
-  type: 'inputNode',
-  name: 'Start',
-  position: { x: 0, y: 0 },
-  content: {
-    fields: [
-      { id: 'a', key: 'a', type: 'number', name: 'a' },
-      { id: 'b', key: 'b', type: 'number', name: 'b' }
-    ]
-  }
-});
+// Native JS implementation using a large switch statement
+const switchCases = Array.from({ length: CASES }, (_, i) => `  case ${i}: return "v${i}";`).join('\n');
 
-const makeOutputNode = () => ({
-  id: 'out',
-  type: 'outputNode',
-  name: 'Result',
-  position: { x: 0, y: 0 },
-  content: {}
-});
+const jsSwitch = new Function(
+  'input',
+  `
+switch (input.value) {
+${switchCases}
+  default: return "other";
+}
+`
+) as (input: { value: number }) => string;
 
-const functionDecision = engine.createDecision({
-  nodes: [
-    makeInputNode(),
-    {
-      id: 'fn',
-      type: 'functionNode',
-      name: 'Fn',
-      position: { x: 0, y: 0 },
-      content:
-        'const handler = (input) => { const sum = input.a + input.b; const category = sum > 1000 ? "huge" : sum > 100 ? "big" : "small"; return { sum, category }; }'
-    },
-    makeOutputNode()
-  ],
-  edges: [
-    { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'fn' },
-    { id: 'e2', type: 'edge', sourceId: 'fn', targetId: 'out' }
-  ]
-});
+// Zen expression decision mirroring the switch logic
+const exprBody =
+  Array.from({ length: CASES }, (_, i) => `value == ${i} ? "v${i}" :`).join(' ') + '"other"';
 
 const expressionDecision = engine.createDecision({
   nodes: [
-    makeInputNode(),
+    {
+      id: 'start',
+      type: 'inputNode',
+      name: 'Start',
+      position: { x: 0, y: 0 },
+      content: { fields: [{ id: 'value', key: 'value', type: 'number', name: 'value' }] }
+    },
     {
       id: 'expr',
       type: 'expressionNode',
       name: 'Expr',
       position: { x: 0, y: 0 },
       content: {
-        expressions: [
-          { id: 'e1', key: 'sum', value: 'a + b' },
-          {
-            id: 'e2',
-            key: 'category',
-            value:
-              'a + b > 1000 ? "huge" : a + b > 100 ? "big" : "small"'
-          }
-        ],
-        passThrough: true,
+        expressions: [{ id: 'res', key: 'result', value: exprBody }],
+        passThrough: false,
         inputField: null,
         outputPath: null,
         executionMode: 'single'
       }
     },
-    makeOutputNode()
+    { id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} }
   ],
   edges: [
     { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'expr' },
@@ -119,9 +89,21 @@ const expressionDecision = engine.createDecision({
   ]
 });
 
-const decisionTableDecision = engine.createDecision({
+// Zen decision table equivalent
+const tableRules = Array.from({ length: CASES }, (_, i) => ({
+  i1: `value == ${i}`,
+  o1: `"v${i}"`
+}));
+
+const tableDecision = engine.createDecision({
   nodes: [
-    makeInputNode(),
+    {
+      id: 'start',
+      type: 'inputNode',
+      name: 'Start',
+      position: { x: 0, y: 0 },
+      content: { fields: [{ id: 'value', key: 'value', type: 'number', name: 'value' }] }
+    },
     {
       id: 'table',
       type: 'decisionTableNode',
@@ -129,33 +111,21 @@ const decisionTableDecision = engine.createDecision({
       position: { x: 0, y: 0 },
       content: {
         hitPolicy: 'first',
-        rules: [
-          { i1: 'a + b <= 100', o1: 'a + b', o2: '"small"' },
-          { i1: 'a + b <= 1000', o1: 'a + b', o2: '"big"' },
-          { i1: 'a + b > 1000', o1: 'a + b', o2: '"huge"' }
-        ],
-        inputs: [{ id: 'i1', name: 'total', field: '' }],
-        outputs: [
-          { id: 'o1', name: 'sum', field: 'sum' },
-          { id: 'o2', name: 'category', field: 'category' }
-        ],
+        rules: tableRules,
+        inputs: [{ id: 'i1', name: 'val', field: '' }],
+        outputs: [{ id: 'o1', name: 'result', field: 'result' }],
         passThrough: false,
         inputField: null,
         outputPath: null,
         executionMode: 'single'
       }
     },
-    makeOutputNode()
+    { id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} }
   ],
   edges: [
     { id: 'e1', type: 'edge', sourceId: 'start', targetId: 'table' },
     { id: 'e2', type: 'edge', sourceId: 'table', targetId: 'out' }
   ]
-});
-
-const passDecision = engine.createDecision({
-  nodes: [makeInputNode(), makeOutputNode()],
-  edges: [{ id: 'e1', type: 'edge', sourceId: 'start', targetId: 'out' }]
 });
 
 // HTTP server
@@ -282,26 +252,15 @@ Bun.serve({
       const results: Record<number, any> = {};
       for (const n of sizes) {
         const data = Array.from({ length: n }, () => ({
-          a: Math.random() * 1000,
-          b: Math.random() * 1000
+          value: Math.floor(Math.random() * CASES)
         }));
 
         let start = performance.now();
         for (const item of data) {
-          jsLogic(item);
+          jsSwitch(item);
         }
         let end = performance.now();
-        const jsSync = end - start;
-
-        start = performance.now();
-        await Promise.all(data.map((item) => Promise.resolve(jsLogic(item))));
-        end = performance.now();
-        const jsAsync = end - start;
-
-        start = performance.now();
-        await Promise.all(data.map((item) => functionDecision.evaluate(item)));
-        end = performance.now();
-        const fnTime = end - start;
+        const jsTime = end - start;
 
         start = performance.now();
         await Promise.all(data.map((item) => expressionDecision.evaluate(item)));
@@ -309,33 +268,11 @@ Bun.serve({
         const exprTime = end - start;
 
         start = performance.now();
-        await Promise.all(data.map((item) => decisionTableDecision.evaluate(item)));
+        await Promise.all(data.map((item) => tableDecision.evaluate(item)));
         end = performance.now();
         const tableTime = end - start;
 
-        const batchSize = 1000;
-        start = performance.now();
-        for (let i = 0; i < data.length; i += batchSize) {
-          const slice = data.slice(i, i + batchSize);
-          await Promise.all(slice.map((item) => decisionTableDecision.evaluate(item)));
-        }
-        end = performance.now();
-        const tableBatchTime = end - start;
-
-        start = performance.now();
-        await Promise.all(data.map((item) => passDecision.evaluate(item)));
-        end = performance.now();
-        const passTime = end - start;
-
-        results[n] = {
-          jsSync,
-          jsAsync,
-          function: fnTime,
-          expression: exprTime,
-          table: tableTime,
-          tableBatch: tableBatchTime,
-          passthrough: passTime
-        };
+        results[n] = { js: jsTime, expression: exprTime, table: tableTime };
       }
       return new Response(JSON.stringify(results), {
         headers: { 'Content-Type': 'application/json' }
