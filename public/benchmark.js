@@ -23708,7 +23708,11 @@ var App = () => {
             /* @__PURE__ */ jsx_dev_runtime.jsxDEV("input", {
               type: "number",
               value: propCount,
-              onChange: (e) => setPropCount(Number(e.target.value)),
+              onChange: (e) => {
+                setPropCount(Number(e.target.value));
+                setParts([]);
+                setResults(null);
+              },
               style: { width: "5rem" }
             }, undefined, false, undefined, this)
           ]
@@ -23722,7 +23726,11 @@ var App = () => {
             /* @__PURE__ */ jsx_dev_runtime.jsxDEV("input", {
               type: "number",
               value: partCount,
-              onChange: (e) => setPartCount(Number(e.target.value)),
+              onChange: (e) => {
+                setPartCount(Number(e.target.value));
+                setParts([]);
+                setResults(null);
+              },
               style: { width: "6rem" }
             }, undefined, false, undefined, this)
           ]
@@ -23736,12 +23744,25 @@ var App = () => {
             /* @__PURE__ */ jsx_dev_runtime.jsxDEV("input", {
               type: "number",
               value: logicLen,
-              onChange: (e) => setLogicLen(Number(e.target.value)),
+              onChange: (e) => {
+                setLogicLen(Number(e.target.value));
+                setParts([]);
+                setResults(null);
+              },
               style: { width: "5rem" }
             }, undefined, false, undefined, this)
           ]
         }, undefined, true, undefined, this)
       }, undefined, false, undefined, this),
+      /* @__PURE__ */ jsx_dev_runtime.jsxDEV("p", {
+        style: { maxWidth: "40rem" },
+        children: [
+          /* @__PURE__ */ jsx_dev_runtime.jsxDEV("strong", {
+            children: "Logic length"
+          }, undefined, false, undefined, this),
+          " is the number of times a long arithmetic formula is repeated for each property. The same calculation runs in native JavaScript, a Zen expression, and a Zen decision table so the comparisons below reflect equivalent work."
+        ]
+      }, undefined, true, undefined, this),
       /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
         children: /* @__PURE__ */ jsx_dev_runtime.jsxDEV("button", {
           onClick: generate,
