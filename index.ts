@@ -40,22 +40,38 @@ const loader = async (key: string) => {
 const engine = new ZenEngine({ loader });
 
 // Heavy arithmetic rule to better stress the JS and Zen runtimes
-const heavyCalc =
-  '((' +
-  '(((value * value + value / 3 - 4) * 2) % 97) + ((value + 7) * (value - 3))' +
-  ' - (value % 11) * 13 + ((value * 17) % 19) * 23 - ((value + 5) * (value + 1))' +
-  '))';
+// Generate a very large arithmetic expression by offsetting the base input
+// and repeating the heavy calculation many times. Modulo keeps the number
+// bounded so decision branches still vary.
+const generateHeavyCalc = (iterations: number) => {
+  const piece = (offset: number) => {
+    const v = `(value + ${offset})`;
+    return (
+      `(((${v} * ${v} + ${v} / 3 - 4) * 2) % 97) + (${v} + 7) * (${v} - 3) - (${v} % 11) * 13 + ((${v} * 17) % 19) * 23 - ` +
+      `(${v} + 5) * (${v} + 1)`
+    );
+  };
+  const expr = Array.from({ length: iterations }, (_, i) => `(${piece(i)})`).join(' + ');
+  return `(${expr}) % 1000`;
+};
 
-// Native JS implementation of the heavy rule
+const heavyCalc = generateHeavyCalc(50);
+
+// Native JS implementation mirroring the expanded heavy rule
 const jsHeavy = (input: { value: number }) => {
-  const v = input.value;
-  const calc =
-    (((v * v + v / 3 - 4) * 2) % 97) +
-    (v + 7) * (v - 3) -
-    (v % 11) * 13 +
-    ((v * 17) % 19) * 23 -
-    (v + 5) * (v + 1);
-  return calc > 1000 ? 'high' : calc > 500 ? 'mid' : 'low';
+  const base = input.value;
+  let calc = 0;
+  for (let i = 0; i < 50; i++) {
+    const v = base + i;
+    calc +=
+      ((v * v + v / 3 - 4) * 2) % 97 +
+      (v + 7) * (v - 3) -
+      (v % 11) * 13 +
+      ((v * 17) % 19) * 23 -
+      (v + 5) * (v + 1);
+  }
+  calc = calc % 1000;
+  return calc > 666 ? 'high' : calc > 333 ? 'mid' : 'low';
 };
 
 // Zen expression decision performing the same heavy arithmetic
@@ -78,7 +94,7 @@ const expressionDecision = engine.createDecision({
           {
             id: 'res',
             key: 'result',
-            value: `${heavyCalc} > 1000 ? "high" : ${heavyCalc} > 500 ? "mid" : "low"`
+            value: `${heavyCalc} > 666 ? "high" : ${heavyCalc} > 333 ? "mid" : "low"`
           }
         ],
         passThrough: false,
@@ -113,8 +129,8 @@ const tableDecision = engine.createDecision({
       content: {
         hitPolicy: 'first',
         rules: [
-          { i1: `${heavyCalc} > 1000`, o1: '"high"' },
-          { i1: `${heavyCalc} > 500`, o1: '"mid"' },
+          { i1: `${heavyCalc} > 666`, o1: '"high"' },
+          { i1: `${heavyCalc} > 333`, o1: '"mid"' },
           { i1: 'true', o1: '"low"' }
         ],
         inputs: [{ id: 'i1', name: 'calc', field: '' }],
