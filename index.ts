@@ -273,10 +273,11 @@ Bun.serve({
         if (!key || !Array.isArray(parts)) {
           return new Response('key and parts are required', { status: 400 });
         }
-        const results = [] as any[];
+        const results: any[] = [];
+        const decision = await engine.getDecision(key);
         for (const part of parts) {
           try {
-            const res = await engine.evaluate(key, part);
+            const res = await decision.evaluate(part);
             results.push(res.result);
           } catch (err: any) {
             results.push({ error: err.message || String(err) });
