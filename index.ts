@@ -173,9 +173,9 @@ const buildTableDecision = (propCount: number, iterations: number) => {
   return engine.createDecision({ nodes, edges });
 };
 
-// Decision tree using custom nodes handled in Rust
-const buildTreeDecision = (propCount: number, iterations: number) => {
-  const inputFields = Array.from({ length: propCount }, (_, i) => ({
+// Build a balanced decision tree using Switch nodes
+const buildTreeDecision = (depth: number) => {
+  const inputFields = Array.from({ length: depth }, (_, i) => ({
     id: `p${i}`,
     key: `p${i}`,
     type: 'number',
@@ -188,23 +188,47 @@ const buildTreeDecision = (propCount: number, iterations: number) => {
       name: 'Start',
       position: { x: 0, y: 0 },
       content: { fields: inputFields }
-    }
+    },
+    { id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} }
   ];
   const edges: any[] = [];
-  for (let i = 0; i < propCount; i++) {
+
+  let counter = 0;
+  const addNode = (level: number, parent: string, sourcePort?: string) => {
+    const id = `s${counter++}`;
     nodes.push({
-      id: `tree${i}`,
-      type: 'customNode',
-      name: `Tree${i}`,
+      id,
+      type: 'switchNode',
+      name: `S${id}`,
       position: { x: 0, y: 0 },
-      content: { kind: 'heavyCalc', config: { prop: `p${i}`, iterations } }
+      content: {
+        hitPolicy: 'first',
+        statements: [
+          { id: `${id}_l`, condition: `p${level} < 500` },
+          { id: `${id}_r`, condition: 'true' }
+        ]
+      }
     });
-    const prev = i === 0 ? 'start' : `tree${i - 1}`;
-    edges.push({ id: `c${i}`, type: 'edge', sourceId: prev, targetId: `tree${i}` });
-  }
-  nodes.push({ id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} });
-  edges.push({ id: 'c_out', type: 'edge', sourceId: `tree${propCount - 1}`, targetId: 'out' });
+    edges.push({ id: `e_${parent}_${id}`, type: 'edge', sourceId: parent, ...(sourcePort ? { sourcePort } : {}), targetId: id });
+    if (level + 1 >= depth) {
+      edges.push({ id: `e_${id}_l_out`, type: 'edge', sourceId: id, sourcePort: `${id}_l`, targetId: 'out' });
+      edges.push({ id: `e_${id}_r_out`, type: 'edge', sourceId: id, sourcePort: `${id}_r`, targetId: 'out' });
+    } else {
+      addNode(level + 1, id, `${id}_l`);
+      addNode(level + 1, id, `${id}_r`);
+    }
+  };
+
+  addNode(0, 'start');
   return engine.createDecision({ nodes, edges });
+};
+
+const jsTree = (part: Record<string, number>, depth: number) => {
+  let idx = 0;
+  for (let i = 0; i < depth; i++) {
+    idx = idx * 2 + (part[`p${i}`] < 500 ? 1 : 2);
+  }
+  return idx;
 };
 // HTTP server
 Bun.serve({
@@ -348,52 +372,20 @@ Bun.serve({
         try {
           const body = await req.json();
           const parts = body.parts as any[];
-          const iterations = Number(body.iterations) || 1;
-          const propCount = Number(body.propCount) || (parts[0] ? Object.keys(parts[0]).length : 0);
-          if (!Array.isArray(parts) || propCount === 0) {
+          const depth = Number(body.depth) || (parts[0] ? Object.keys(parts[0]).length : 0);
+          if (!Array.isArray(parts) || depth === 0) {
             return new Response(
               JSON.stringify({ error: 'parts are required' }),
               { status: 400, headers: { 'Content-Type': 'application/json' } }
             );
           }
-
-          // Build decisions and capture build time
+          // Build decision tree and measure build time
           let start = performance.now();
-          const exprDecision = buildExpressionDecision(propCount, iterations);
+          const treeDecision = buildTreeDecision(depth);
           let end = performance.now();
-          const exprBuild = end - start;
-
-          start = performance.now();
-          const tableDecision = buildTableDecision(propCount, iterations);
-          end = performance.now();
-          const tableBuild = end - start;
-
-          start = performance.now();
-          const treeDecision = buildTreeDecision(propCount, iterations);
-          end = performance.now();
           const treeBuild = end - start;
 
-          // Build remote rule
-          start = performance.now();
-          await fetch('http://localhost:4000/build', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: jsHeavyPart.toString() })
-          });
-          end = performance.now();
-          const remoteBuild = end - start;
-
-          // Precompile decisions so evaluation doesn't include compilation
-          start = performance.now();
-          exprDecision.validate();
-          end = performance.now();
-          const exprCompile = end - start;
-
-          start = performance.now();
-          tableDecision.validate();
-          end = performance.now();
-          const tableCompile = end - start;
-
+          // Precompile decision
           start = performance.now();
           treeDecision.validate();
           end = performance.now();
@@ -402,26 +394,12 @@ Bun.serve({
           // JS baseline
           start = performance.now();
           for (const item of parts) {
-            jsHeavyPart(item, propCount, iterations);
+            jsTree(item, depth);
           }
           end = performance.now();
           const jsTime = end - start;
 
-          // Evaluate decisions sequentially to reuse compiled logic
-          start = performance.now();
-          for (const p of parts) {
-            await exprDecision.evaluate(p);
-          }
-          end = performance.now();
-          const exprTime = end - start;
-
-          start = performance.now();
-          for (const p of parts) {
-            await tableDecision.evaluate(p);
-          }
-          end = performance.now();
-          const tableTime = end - start;
-
+          // Evaluate decision tree
           start = performance.now();
           for (const p of parts) {
             await treeDecision.evaluate(p);
@@ -429,27 +407,12 @@ Bun.serve({
           end = performance.now();
           const treeTime = end - start;
 
-          // Evaluate rule over HTTP for each part
-          start = performance.now();
-          for (const p of parts) {
-            await fetch('http://localhost:4000/run', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ part: p, propCount, iterations })
-            });
-          }
-          end = performance.now();
-          const remoteTime = end - start;
-
           return new Response(
             JSON.stringify({
               js: jsTime,
-              expression: exprTime,
-              table: tableTime,
               tree: treeTime,
-              remote: { build: remoteBuild, run: remoteTime },
-              build: { expression: exprBuild, table: tableBuild, tree: treeBuild },
-              compile: { expression: exprCompile, table: tableCompile, tree: treeCompile }
+              build: { tree: treeBuild },
+              compile: { tree: treeCompile }
             }),
             { headers: { 'Content-Type': 'application/json' } }
           );

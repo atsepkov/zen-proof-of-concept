@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 const App = () => {
-  const [propCount, setPropCount] = useState(100);
+  const [depth, setDepth] = useState(10);
   const [partCount, setPartCount] = useState(1000);
-  const [logicLen, setLogicLen] = useState(3);
   const [parts, setParts] = useState<any[]>([]);
   const [results, setResults] = useState<any | null>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -13,7 +12,7 @@ const App = () => {
   const generate = () => {
     const arr = Array.from({ length: partCount }, () => {
       const obj: any = {};
-      for (let i = 0; i < propCount; i++) {
+      for (let i = 0; i < depth; i++) {
         obj[`p${i}`] = Math.floor(Math.random() * 1000);
       }
       return obj;
@@ -28,12 +27,12 @@ const App = () => {
     const res = await fetch('/benchmark', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parts, iterations: logicLen, propCount })
+      body: JSON.stringify({ parts, depth })
     });
     const data = await res.json();
     setResults(data);
     setHistory((h) => [
-      { ts: Date.now(), params: { propCount, partCount, logicLen }, ...data },
+      { ts: Date.now(), params: { depth, partCount }, ...data },
       ...h,
     ]);
     setRunning(false);
@@ -44,12 +43,12 @@ const App = () => {
       <h2>Zen Benchmark</h2>
       <div style={{ marginBottom: '0.5rem' }}>
         <label>
-          Properties per Part:&nbsp;
+          Tree Depth:&nbsp;
           <input
             type="number"
-            value={propCount}
+            value={depth}
             onChange={(e) => {
-              setPropCount(Number(e.target.value));
+              setDepth(Number(e.target.value));
               setParts([]);
               setResults(null);
             }}
@@ -72,25 +71,9 @@ const App = () => {
           />
         </label>
       </div>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <label>
-          Logic Length:&nbsp;
-          <input
-            type="number"
-            value={logicLen}
-            onChange={(e) => {
-              setLogicLen(Number(e.target.value));
-              setParts([]);
-              setResults(null);
-            }}
-            style={{ width: '5rem' }}
-          />
-        </label>
-      </div>
       <p style={{ maxWidth: '40rem' }}>
-        <strong>Logic length</strong> is the number of times a long arithmetic formula is repeated for each
-        property. The same calculation runs in native JavaScript, a Zen expression, and a Zen decision table so
-        the comparisons below reflect equivalent work.
+        Generates a balanced decision tree comparing different properties at each level. Results show native
+        JavaScript vs. the compiled Zen decision tree.
       </p>
       <div>
         <button onClick={generate}>Generate Parts</button>
@@ -98,7 +81,7 @@ const App = () => {
       {parts.length > 0 && (
         <div style={{ marginTop: '1rem' }}>
           <p>
-            Generated {parts.length} parts with {propCount} properties each and logic length {logicLen}.
+            Generated {parts.length} parts with depth {depth}.
           </p>
           <button onClick={run} disabled={running} style={{ opacity: running ? 0.5 : 1 }}>
             {running ? 'Running…' : 'Run Benchmark'}
@@ -110,19 +93,8 @@ const App = () => {
           <h4>Latest Result</h4>
           <p>JS: {results.js.toFixed(3)} ms</p>
           <p>
-            Expression: {results.expression.toFixed(3)} ms (build {results.build.expression.toFixed(3)} ms,
-            compile {results.compile.expression.toFixed(3)} ms)
-          </p>
-          <p>
-            Table: {results.table.toFixed(3)} ms (build {results.build.table.toFixed(3)} ms, compile{' '}
-            {results.compile.table.toFixed(3)} ms)
-          </p>
-          <p>
             Decision Tree: {results.tree.toFixed(3)} ms (build {results.build.tree.toFixed(3)} ms, compile{' '}
             {results.compile.tree.toFixed(3)} ms)
-          </p>
-          <p>
-            Remote: build {results.remote.build.toFixed(3)} ms, run {results.remote.run.toFixed(3)} ms
           </p>
         </div>
       )}
@@ -132,8 +104,8 @@ const App = () => {
           <ul>
             {history.slice(1).map((h) => (
               <li key={h.ts}>
-                {new Date(h.ts).toLocaleTimeString()}: {h.params.partCount} parts × {h.params.propCount} props, logic {h.params.logicLen}
-                — JS {h.js.toFixed(3)} ms, Expr {h.expression.toFixed(3)} ms, Table {h.table.toFixed(3)} ms, Tree {h.tree.toFixed(3)} ms, Remote run {h.remote.run.toFixed(3)} ms
+                {new Date(h.ts).toLocaleTimeString()}: {h.params.partCount} parts, depth {h.params.depth}
+                — JS {h.js.toFixed(3)} ms, Tree {h.tree.toFixed(3)} ms
               </li>
             ))}
           </ul>
