@@ -23835,6 +23835,15 @@ var App = () => {
               results.compile.table.toFixed(3),
               " ms)"
             ]
+          }, undefined, true, undefined, this),
+          /* @__PURE__ */ jsx_dev_runtime.jsxDEV("p", {
+            children: [
+              "Remote: build ",
+              results.remote.build.toFixed(3),
+              " ms, run ",
+              results.remote.run.toFixed(3),
+              " ms"
+            ]
           }, undefined, true, undefined, this)
         ]
       }, undefined, true, undefined, this),
@@ -23860,6 +23869,8 @@ var App = () => {
                 h.expression.toFixed(3),
                 " ms, Table ",
                 h.table.toFixed(3),
+                " ms, Remote run ",
+                h.remote.run.toFixed(3),
                 " ms"
               ]
             }, h.ts, true, undefined, this))

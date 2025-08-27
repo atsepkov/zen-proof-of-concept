@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "build:ui": "node fix-zen-wasm.js && bun build editor.tsx analyze.tsx benchmark.tsx --outdir public",
-    "postinstall": "node fix-zen-wasm.js"
+    "postinstall": "node fix-zen-wasm.js",
+    "remote": "node remote-engine.js"
   },
   "devDependencies": {
     "@types/bun": "latest"

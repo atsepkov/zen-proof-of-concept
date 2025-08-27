@@ -312,6 +312,16 @@ Bun.serve({
           end = performance.now();
           const tableBuild = end - start;
 
+          // Build remote rule
+          start = performance.now();
+          await fetch('http://localhost:4000/build', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: jsHeavyPart.toString() })
+          });
+          end = performance.now();
+          const remoteBuild = end - start;
+
           // Precompile decisions so evaluation doesn't include compilation
           start = performance.now();
           exprDecision.validate();
@@ -346,11 +356,22 @@ Bun.serve({
           end = performance.now();
           const tableTime = end - start;
 
+          // Evaluate rule over HTTP
+          start = performance.now();
+          await fetch('http://localhost:4000/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parts, propCount, iterations })
+          });
+          end = performance.now();
+          const remoteTime = end - start;
+
           return new Response(
             JSON.stringify({
               js: jsTime,
               expression: exprTime,
               table: tableTime,
+              remote: { build: remoteBuild, run: remoteTime },
               build: { expression: exprBuild, table: tableBuild },
               compile: { expression: exprCompile, table: tableCompile }
             }),
