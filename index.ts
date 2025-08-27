@@ -356,13 +356,15 @@ Bun.serve({
           end = performance.now();
           const tableTime = end - start;
 
-          // Evaluate rule over HTTP
+          // Evaluate rule over HTTP for each part
           start = performance.now();
-          await fetch('http://localhost:4000/run', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ parts, propCount, iterations })
-          });
+          for (const p of parts) {
+            await fetch('http://localhost:4000/run', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ part: p, propCount, iterations })
+            });
+          }
           end = performance.now();
           const remoteTime = end - start;
 
