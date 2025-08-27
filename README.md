@@ -33,7 +33,7 @@ data using Zen Engine.
 
 ```bash
 bun install
-bun run build:editor   # build frontend assets
+bun run build:ui   # build frontend assets
 bun run index.ts
 ```
 

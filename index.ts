@@ -43,12 +43,9 @@ const engine = new ZenEngine({ loader });
 const generateHeavyCalc = (iterations: number, variable = 'value') => {
   const piece = (offset: number) => {
     const v = `(${variable} + ${offset})`;
-    return (
-      `(((${v} * ${v} + ${v} / 3 - 4) * 2) % 97) + (${v} + 7) * (${v} - 3) - (${v} % 11) * 13 + ((${v} * 17) % 19) * 23 - ` +
-      `(${v} + 5) * (${v} + 1)`
-    );
+    return `(((${v} * (${v} + 3)) % (${offset} + 5)) + (${v} * ${offset}) - ((${v} - ${offset}) * (${v} % (${offset} + 1))))`;
   };
-  const expr = Array.from({ length: iterations }, (_, i) => `(${piece(i)})`).join(' + ');
+  const expr = Array.from({ length: iterations }, (_, i) => piece(i)).join(' + ');
   return `(${expr}) % 1000`;
 };
 
@@ -56,12 +53,7 @@ const jsHeavyValue = (value: number, iterations: number) => {
   let calc = 0;
   for (let i = 0; i < iterations; i++) {
     const v = value + i;
-    calc +=
-      ((v * v + v / 3 - 4) * 2) % 97 +
-      (v + 7) * (v - 3) -
-      (v % 11) * 13 +
-      ((v * 17) % 19) * 23 -
-      (v + 5) * (v + 1);
+    calc += ((v * (v + 3)) % (i + 5)) + v * i - ((v - i) * (v % (i + 1)));
   }
   calc = calc % 1000;
   return calc > 666 ? 'high' : calc > 333 ? 'mid' : 'low';
@@ -320,16 +312,14 @@ Bun.serve({
           end = performance.now();
           const tableBuild = end - start;
 
-          // Warm up decisions so compilation cost isn't measured
-          const warmExpr = { ...parts[0] };
+          // Precompile decisions so evaluation doesn't include compilation
           start = performance.now();
-          await exprDecision.evaluate(warmExpr);
+          exprDecision.validate();
           end = performance.now();
           const exprCompile = end - start;
 
-          const warmTable = { ...parts[0] };
           start = performance.now();
-          await tableDecision.evaluate(warmTable);
+          tableDecision.validate();
           end = performance.now();
           const tableCompile = end - start;
 
