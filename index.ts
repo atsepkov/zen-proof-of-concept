@@ -197,7 +197,7 @@ const buildTreeDecision = (propCount: number, iterations: number) => {
       type: 'customNode',
       name: `Tree${i}`,
       position: { x: 0, y: 0 },
-      content: { kind: 'heavyCalc', prop: `p${i}`, iterations }
+      content: { kind: 'heavyCalc', config: { prop: `p${i}`, iterations } }
     });
     const prev = i === 0 ? 'start' : `tree${i - 1}`;
     edges.push({ id: `c${i}`, type: 'edge', sourceId: prev, targetId: `tree${i}` });
@@ -317,7 +317,10 @@ Bun.serve({
         const key = body.key as string;
         const parts = body.parts as any[];
         if (!key || !Array.isArray(parts)) {
-          return new Response('key and parts are required', { status: 400 });
+          return new Response(
+            JSON.stringify({ error: 'key and parts are required' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+          );
         }
         const results = [] as any[];
         for (const part of parts) {
@@ -332,7 +335,11 @@ Bun.serve({
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (err: any) {
-        return new Response(String(err.message || err), { status: 500 });
+        console.error('Analyze error', err);
+        return new Response(
+          JSON.stringify({ error: err.message || String(err) }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
       }
     }
 
@@ -344,7 +351,10 @@ Bun.serve({
           const iterations = Number(body.iterations) || 1;
           const propCount = Number(body.propCount) || (parts[0] ? Object.keys(parts[0]).length : 0);
           if (!Array.isArray(parts) || propCount === 0) {
-            return new Response('parts are required', { status: 400 });
+            return new Response(
+              JSON.stringify({ error: 'parts are required' }),
+              { status: 400, headers: { 'Content-Type': 'application/json' } }
+            );
           }
 
           // Build decisions and capture build time
@@ -444,7 +454,11 @@ Bun.serve({
             { headers: { 'Content-Type': 'application/json' } }
           );
         } catch (err: any) {
-          return new Response(String(err.message || err), { status: 500 });
+          console.error('Benchmark error', err);
+          return new Response(
+            JSON.stringify({ error: err.message || String(err) }),
+            { status: 500, headers: { 'Content-Type': 'application/json' } }
+          );
         }
       }
 
