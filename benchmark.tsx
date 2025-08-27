@@ -118,6 +118,10 @@ const App = () => {
             {results.compile.table.toFixed(3)} ms)
           </p>
           <p>
+            Decision Tree: {results.tree.toFixed(3)} ms (build {results.build.tree.toFixed(3)} ms, compile{' '}
+            {results.compile.tree.toFixed(3)} ms)
+          </p>
+          <p>
             Remote: build {results.remote.build.toFixed(3)} ms, run {results.remote.run.toFixed(3)} ms
           </p>
         </div>
@@ -129,7 +133,7 @@ const App = () => {
             {history.slice(1).map((h) => (
               <li key={h.ts}>
                 {new Date(h.ts).toLocaleTimeString()}: {h.params.partCount} parts × {h.params.propCount} props, logic {h.params.logicLen}
-                — JS {h.js.toFixed(3)} ms, Expr {h.expression.toFixed(3)} ms, Table {h.table.toFixed(3)} ms, Remote run {h.remote.run.toFixed(3)} ms
+                — JS {h.js.toFixed(3)} ms, Expr {h.expression.toFixed(3)} ms, Table {h.table.toFixed(3)} ms, Tree {h.tree.toFixed(3)} ms, Remote run {h.remote.run.toFixed(3)} ms
               </li>
             ))}
           </ul>

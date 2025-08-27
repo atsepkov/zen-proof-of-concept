@@ -37,7 +37,19 @@ const loader = async (key: string) => {
   };
 
 // Zen engine instance with loader pulling JDM from SQLite
-const engine = new ZenEngine({ loader });
+const engine = new ZenEngine({
+  loader,
+  // Custom handler to support native decision-tree benchmark nodes
+  async customHandler(req) {
+    if (req.node.kind === 'heavyCalc') {
+      const { prop, iterations } = req.node.config as any;
+      const value = (req.input as any)[prop];
+      const out = jsHeavyValue(value, iterations);
+      return { output: { [prop]: out } };
+    }
+    return { output: req.input };
+  }
+});
 
 // Heavy arithmetic rule generator and helpers
 const generateHeavyCalc = (iterations: number, variable = 'value') => {
@@ -158,6 +170,40 @@ const buildTableDecision = (propCount: number, iterations: number) => {
   }
   nodes.push({ id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} });
   edges.push({ id: 't_out', type: 'edge', sourceId: `table${propCount - 1}`, targetId: 'out' });
+  return engine.createDecision({ nodes, edges });
+};
+
+// Decision tree using custom nodes handled in Rust
+const buildTreeDecision = (propCount: number, iterations: number) => {
+  const inputFields = Array.from({ length: propCount }, (_, i) => ({
+    id: `p${i}`,
+    key: `p${i}`,
+    type: 'number',
+    name: `p${i}`
+  }));
+  const nodes: any[] = [
+    {
+      id: 'start',
+      type: 'inputNode',
+      name: 'Start',
+      position: { x: 0, y: 0 },
+      content: { fields: inputFields }
+    }
+  ];
+  const edges: any[] = [];
+  for (let i = 0; i < propCount; i++) {
+    nodes.push({
+      id: `tree${i}`,
+      type: 'customNode',
+      name: `Tree${i}`,
+      position: { x: 0, y: 0 },
+      content: { kind: 'heavyCalc', prop: `p${i}`, iterations }
+    });
+    const prev = i === 0 ? 'start' : `tree${i - 1}`;
+    edges.push({ id: `c${i}`, type: 'edge', sourceId: prev, targetId: `tree${i}` });
+  }
+  nodes.push({ id: 'out', type: 'outputNode', name: 'Result', position: { x: 0, y: 0 }, content: {} });
+  edges.push({ id: 'c_out', type: 'edge', sourceId: `tree${propCount - 1}`, targetId: 'out' });
   return engine.createDecision({ nodes, edges });
 };
 // HTTP server
@@ -312,6 +358,11 @@ Bun.serve({
           end = performance.now();
           const tableBuild = end - start;
 
+          start = performance.now();
+          const treeDecision = buildTreeDecision(propCount, iterations);
+          end = performance.now();
+          const treeBuild = end - start;
+
           // Build remote rule
           start = performance.now();
           await fetch('http://localhost:4000/build', {
@@ -332,6 +383,11 @@ Bun.serve({
           tableDecision.validate();
           end = performance.now();
           const tableCompile = end - start;
+
+          start = performance.now();
+          treeDecision.validate();
+          end = performance.now();
+          const treeCompile = end - start;
 
           // JS baseline
           start = performance.now();
@@ -356,6 +412,13 @@ Bun.serve({
           end = performance.now();
           const tableTime = end - start;
 
+          start = performance.now();
+          for (const p of parts) {
+            await treeDecision.evaluate(p);
+          }
+          end = performance.now();
+          const treeTime = end - start;
+
           // Evaluate rule over HTTP for each part
           start = performance.now();
           for (const p of parts) {
@@ -373,9 +436,10 @@ Bun.serve({
               js: jsTime,
               expression: exprTime,
               table: tableTime,
+              tree: treeTime,
               remote: { build: remoteBuild, run: remoteTime },
-              build: { expression: exprBuild, table: tableBuild },
-              compile: { expression: exprCompile, table: tableCompile }
+              build: { expression: exprBuild, table: tableBuild, tree: treeBuild },
+              compile: { expression: exprCompile, table: tableCompile, tree: treeCompile }
             }),
             { headers: { 'Content-Type': 'application/json' } }
           );
