@@ -25,7 +25,7 @@ const App = () => {
 
   const run = async () => {
     setRunning(true);
-    const res = await fetch('/benchmark', {
+    const res = await fetch('/benchmark/arbitrary-js', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ parts, iterations: logicLen, propCount })
