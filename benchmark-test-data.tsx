@@ -34,6 +34,7 @@ const App = () => {
     const jdm = await res.json();
 
     const props = new Set<string>();
+    const arrays = new Set<string>();
     const src = JSON.stringify(jdm);
     const reserved = new Set([
       'true',
@@ -69,6 +70,17 @@ const App = () => {
       } else if (n.type === 'expressionNode') {
         for (const exp of n.content?.expressions || []) {
           const val = typeof exp.value === 'string' ? exp.value : '';
+          for (const fn of ['sum', 'filter', 'map', 'reduce']) {
+            const re = new RegExp(`${fn}\\(([a-zA-Z0-9_.]+)`, 'g');
+            let m;
+            while ((m = re.exec(val)) !== null) {
+              const prop = m[1];
+              if (!reserved.has(prop)) {
+                props.add(prop);
+                arrays.add(prop);
+              }
+            }
+          }
           const cleaned = val.replace(/(['"])(?:\\.|[^\\])*?\1/g, '');
           for (const m of cleaned.match(/[a-zA-Z_][a-zA-Z0-9_.]*/g) || []) {
             if (!reserved.has(m)) {
@@ -82,7 +94,15 @@ const App = () => {
     const arr = Array.from({ length: count }, () => {
       const obj: any = {};
       for (const p of props) {
-        setByPath(obj, p, Math.floor(Math.random() * 100));
+        if (arrays.has(p)) {
+          setByPath(
+            obj,
+            p,
+            Array.from({ length: 5 }, () => Math.floor(Math.random() * 100))
+          );
+        } else {
+          setByPath(obj, p, Math.floor(Math.random() * 100));
+        }
       }
       return obj;
     });

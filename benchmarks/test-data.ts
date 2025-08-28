@@ -44,14 +44,40 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
       }
       case 'expressionNode': {
         try {
+          const helpers = {
+            sum: (arr: any[]) => arr.reduce((a, b) => a + b, 0),
+            filter: (arr: any[], fn: (item: any) => boolean) => arr.filter(fn),
+            map: (arr: any[], fn: (item: any) => any) => arr.map(fn),
+            reduce: (
+              arr: any[],
+              fn: (total: any, item: any) => any,
+              init: any
+            ) => arr.reduce(fn, init),
+          };
           const exps = n.content?.expressions || [];
-          const compiled = exps.map((e: any) => ({
-            key: e.key,
-            fn: new Function('input', `with(input){ return (${e.value}); }`),
-          }));
+          const compiled = exps.map((e: any) => {
+            let val = typeof e.value === 'string' ? e.value : '';
+            val = val.replace(/filter\(([^,]+),\s*([^()]+)\)/g, (_: any, arr: string, expr: string) =>
+              `filter(${arr}, (item) => ${expr.replace(/#/g, 'item')})`
+            );
+            val = val.replace(/map\(([^,]+),\s*([^()]+)\)/g, (_: any, arr: string, expr: string) =>
+              `map(${arr}, (item) => ${expr.replace(/#/g, 'item')})`
+            );
+            val = val.replace(/reduce\(([^,]+),\s*([^,]+),\s*([^()]+)\)/g, (_: any, arr: string, expr: string, init: string) =>
+              `reduce(${arr}, (total, item) => ${expr
+                .replace(/#/g, 'item')
+                .replace(/total/g, 'total')}, ${init})`
+            );
+            const fn = new Function(
+              'input',
+              'helpers',
+              `with(helpers){ with(input){ return (${val}); } }`
+            );
+            return { key: e.key, fn };
+          });
           return async (input: any) => {
             for (const { key, fn } of compiled) {
-              setByPath(input, key, fn(input));
+              setByPath(input, key, fn(input, helpers));
             }
             return input;
           };
