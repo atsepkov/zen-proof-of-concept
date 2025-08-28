@@ -35,11 +35,21 @@ const App = () => {
 
     const props = new Set<string>();
     const src = JSON.stringify(jdm);
+    const reserved = new Set([
+      'true',
+      'false',
+      'null',
+      'undefined',
+      'sum',
+      'filter',
+      'map',
+      'reduce'
+    ]);
     // Match direct references like input.foo or input.bar.baz
     for (const m of src.matchAll(/input\.([a-zA-Z0-9_.]+)/g)) {
       props.add(m[1]);
     }
-    // Include decision table input fields and switch node conditions
+    // Include decision table input fields, switch node conditions, and expression references
     for (const n of jdm.nodes || []) {
       if (n.type === 'decisionTableNode') {
         for (const inp of n.content?.inputs || []) {
@@ -51,7 +61,17 @@ const App = () => {
           // strip string literals to avoid capturing quoted text
           const cleaned = cond.replace(/(['"])(?:\\.|[^\\])*?\1/g, '');
           for (const m of cleaned.match(/[a-zA-Z_][a-zA-Z0-9_.]*/g) || []) {
-            if (!['true', 'false', 'null', 'undefined'].includes(m)) {
+            if (!reserved.has(m)) {
+              props.add(m);
+            }
+          }
+        }
+      } else if (n.type === 'expressionNode') {
+        for (const exp of n.content?.expressions || []) {
+          const val = typeof exp.value === 'string' ? exp.value : '';
+          const cleaned = val.replace(/(['"])(?:\\.|[^\\])*?\1/g, '');
+          for (const m of cleaned.match(/[a-zA-Z_][a-zA-Z0-9_.]*/g) || []) {
+            if (!reserved.has(m)) {
               props.add(m);
             }
           }

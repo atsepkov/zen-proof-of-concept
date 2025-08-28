@@ -43,17 +43,21 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
         return null;
       }
       case 'expressionNode': {
-        const exps = n.content?.expressions || [];
-        const compiled = exps.map((e: any) => ({
-          key: e.key,
-          fn: new Function('input', `with(input){ return (${e.value}); }`),
-        }));
-        return async (input: any) => {
-          for (const { key, fn } of compiled) {
-            setByPath(input, key, fn(input));
-          }
-          return input;
-        };
+        try {
+          const exps = n.content?.expressions || [];
+          const compiled = exps.map((e: any) => ({
+            key: e.key,
+            fn: new Function('input', `with(input){ return (${e.value}); }`),
+          }));
+          return async (input: any) => {
+            for (const { key, fn } of compiled) {
+              setByPath(input, key, fn(input));
+            }
+            return input;
+          };
+        } catch {
+          return null;
+        }
       }
       case 'decisionTableNode': {
         const content = n.content || {};
