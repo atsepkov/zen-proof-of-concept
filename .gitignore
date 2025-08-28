@@ -5,7 +5,8 @@ node_modules
 out
 dist
 *.tgz
-public/
+public/*.js
+public/*.css
 
 # code coverage
 coverage
