@@ -125,7 +125,8 @@ export async function runBenchmark(
   engine: ZenEngine,
   parts: any[],
   iterations: number,
-  propCount: number
+  propCount: number,
+  _extra?: any
 ) {
   // Build decisions and capture build time
   let start = performance.now();
