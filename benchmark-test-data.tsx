@@ -39,11 +39,22 @@ const App = () => {
     for (const m of src.matchAll(/input\.([a-zA-Z0-9_.]+)/g)) {
       props.add(m[1]);
     }
-    // Include decision table input fields
+    // Include decision table input fields and switch node conditions
     for (const n of jdm.nodes || []) {
       if (n.type === 'decisionTableNode') {
         for (const inp of n.content?.inputs || []) {
           if (typeof inp.field === 'string') props.add(inp.field);
+        }
+      } else if (n.type === 'switchNode') {
+        for (const st of n.content?.statements || []) {
+          const cond = typeof st.condition === 'string' ? st.condition : '';
+          // strip string literals to avoid capturing quoted text
+          const cleaned = cond.replace(/(['"])(?:\\.|[^\\])*?\1/g, '');
+          for (const m of cleaned.match(/[a-zA-Z_][a-zA-Z0-9_.]*/g) || []) {
+            if (!['true', 'false', 'null', 'undefined'].includes(m)) {
+              props.add(m);
+            }
+          }
         }
       }
     }
