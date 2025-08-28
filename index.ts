@@ -218,14 +218,20 @@ Bun.serve({
         const propCount =
           Number(body.propCount) || (parts[0] ? Object.keys(parts[0]).length : 0);
         if (!Array.isArray(parts) || propCount === 0) {
-          return new Response('parts are required', { status: 400 });
+          return new Response(JSON.stringify({ error: 'parts are required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
         }
         const result = await runner(engine, parts, iterations, propCount, body);
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (err: any) {
-        return new Response(String(err.message || err), { status: 500 });
+        return new Response(JSON.stringify({ error: err.message || String(err) }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
 

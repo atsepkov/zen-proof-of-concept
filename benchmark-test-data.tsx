@@ -1,6 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
+const setByPath = (obj: any, path: string, value: any) => {
+  const parts = path.split('.');
+  let target = obj;
+  while (parts.length > 1) {
+    const key = parts.shift()!;
+    if (typeof target[key] !== 'object' || target[key] === null) {
+      target[key] = {};
+    }
+    target = target[key];
+  }
+  target[parts[0]] = value;
+};
+
 const App = () => {
   const [files, setFiles] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
@@ -19,11 +32,27 @@ const App = () => {
     if (!selected) return;
     const res = await fetch(`/test-data/${selected}`);
     const jdm = await res.json();
+
+    const props = new Set<string>();
     const src = JSON.stringify(jdm);
-    const props = Array.from(new Set([...src.matchAll(/input\.([a-zA-Z0-9_]+)/g)].map((m) => m[1])));
+    // Match direct references like input.foo or input.bar.baz
+    for (const m of src.matchAll(/input\.([a-zA-Z0-9_.]+)/g)) {
+      props.add(m[1]);
+    }
+    // Include decision table input fields
+    for (const n of jdm.nodes || []) {
+      if (n.type === 'decisionTableNode') {
+        for (const inp of n.content?.inputs || []) {
+          if (typeof inp.field === 'string') props.add(inp.field);
+        }
+      }
+    }
+
     const arr = Array.from({ length: count }, () => {
       const obj: any = {};
-      for (const p of props) obj[p] = Math.floor(Math.random() * 100);
+      for (const p of props) {
+        setByPath(obj, p, Math.floor(Math.random() * 100));
+      }
       return obj;
     });
     setItems(arr);
@@ -37,9 +66,18 @@ const App = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file: selected, parts: items })
     });
-    const data = await res.json();
-    setResults(data);
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      data = { error: 'Invalid JSON response' };
+    }
     setRunning(false);
+    if (!res.ok) {
+      alert(data.error || 'Benchmark failed');
+      return;
+    }
+    setResults(data);
   };
 
   return (
