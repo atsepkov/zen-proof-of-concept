@@ -18,11 +18,12 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
   const nodes = new Map(jdm.nodes.map((n: any) => [n.id, n]));
   const edges = jdm.edges || [];
   const inputNode = jdm.nodes.find((n: any) => n.type === 'inputNode');
-  const outputNode = jdm.nodes.find((n: any) => n.type === 'outputNode');
+  const outputNodes = jdm.nodes.filter((n: any) => n.type === 'outputNode');
   if (!inputNode) return null;
 
   const outgoing = new Map<string, string[]>();
   const indegree = new Map<string, number>();
+  const edgesBySource = new Map<string, any[]>();
   for (const n of jdm.nodes) {
     outgoing.set(n.id, []);
     indegree.set(n.id, 0);
@@ -30,6 +31,8 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
   for (const e of edges) {
     outgoing.get(e.sourceId)?.push(e.targetId);
     indegree.set(e.targetId, (indegree.get(e.targetId) || 0) + 1);
+    if (!edgesBySource.has(e.sourceId)) edgesBySource.set(e.sourceId, []);
+    edgesBySource.get(e.sourceId)!.push(e);
   }
 
   const order: any[] = [];
@@ -48,11 +51,40 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
     }
   }
 
+  const guards = new Map<string, Record<string, string>>();
+  guards.set(inputNode.id, {});
+  const stack: string[] = [inputNode.id];
+  while (stack.length) {
+    const id = stack.pop()!;
+    const base = guards.get(id)!;
+    for (const e of edgesBySource.get(id) || []) {
+      const next = e.targetId;
+      const nextGuard: Record<string, string> = { ...base };
+      if (nodes.get(id)?.type === 'switchNode' && e.sourceHandle) {
+        nextGuard[id] = e.sourceHandle;
+      }
+      if (!guards.has(next)) {
+        guards.set(next, nextGuard);
+        stack.push(next);
+      }
+    }
+  }
+
   const outputSources = new Set(
     edges
-      .filter((e: any) => e.targetId === outputNode?.id)
+      .filter((e: any) => outputNodes.some((o: any) => o.id === e.targetId))
       .map((e: any) => e.sourceId)
   );
+  const switchOutputs = new Map<string, Set<string>>();
+  for (const e of edges) {
+    if (
+      e.sourceHandle &&
+      outputNodes.some((o: any) => o.id === e.targetId)
+    ) {
+      if (!switchOutputs.has(e.sourceId)) switchOutputs.set(e.sourceId, new Set());
+      switchOutputs.get(e.sourceId)!.add(e.sourceHandle);
+    }
+  }
 
   function merge(target: any, src: any) {
     for (const key of Object.keys(src)) {
@@ -67,6 +99,8 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
   }
 
   const fns = order.map((n) => {
+    const guard = guards.get(n.id) || {};
+    let impl: ((ctx: any) => Promise<any> | any) | null = null;
     switch (n.type) {
       case 'functionNode': {
         const src =
@@ -79,12 +113,12 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
           try {
             const body = src.replace(/\bexport\s+/g, '');
             const fn = new Function(`${body}; return handler;`)();
-            return async (ctx: any) => fn(ctx, {});
+            impl = async (ctx: any) => fn(ctx, {});
           } catch {
-            return null;
+            impl = null;
           }
         }
-        return null;
+        break;
       }
       case 'expressionNode': {
         try {
@@ -119,7 +153,7 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
             );
             return { key: e.key, fn };
           });
-          return async (ctx: any) => {
+          impl = async (ctx: any) => {
             const result: any = {};
             for (const { key, fn } of compiled) {
               setByPath(result, key, fn(ctx, helpers));
@@ -127,8 +161,9 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
             return result;
           };
         } catch {
-          return null;
+          impl = null;
         }
+        break;
       }
       case 'decisionTableNode': {
         const content = n.content || {};
@@ -184,7 +219,7 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
               .filter(Boolean);
             return { conds, outs };
           });
-          return async (ctx: any) => {
+          impl = async (ctx: any) => {
             for (const rule of compiledRules) {
               let match = true;
               for (const cond of rule.conds) {
@@ -204,12 +239,58 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
             return {};
           };
         } catch {
-          return null;
+          impl = null;
         }
+        break;
+      }
+      case 'switchNode': {
+        try {
+          const stmts = n.content?.statements || [];
+          const compiled = stmts.map((s: any) => {
+            if (!s.condition) return { id: s.id, fn: null };
+            try {
+              return {
+                id: s.id,
+                fn: new Function('input', `with(input){ return (${s.condition}); }`),
+              };
+            } catch {
+              return { id: s.id, fn: () => false };
+            }
+          });
+          impl = async (ctx: any) => {
+            let chosen: string | null = null;
+            for (const { id, fn } of compiled) {
+              if (!fn || fn(ctx)) {
+                (ctx as any)[`__switch_${n.id}`] = id;
+                chosen = id;
+                break;
+              }
+            }
+            if (chosen && switchOutputs.get(n.id)?.has(chosen)) {
+              const out: any = {};
+              for (const key of Object.keys(ctx)) {
+                if (!key.startsWith('__switch_')) out[key] = (ctx as any)[key];
+              }
+              return out;
+            }
+            return {};
+          };
+        } catch {
+          impl = null;
+        }
+        break;
       }
       default:
-        return null;
+        impl = null;
     }
+
+    if (!impl) return null;
+    return async (ctx: any) => {
+      for (const [sid, handle] of Object.entries(guard)) {
+        if ((ctx as any)[`__switch_${sid}`] !== handle) return {};
+      }
+      return impl!(ctx);
+    };
   });
 
   if (fns.some((f) => !f)) return null;
