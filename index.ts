@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { ZenEngine } from '@gorules/zen-engine';
 import { benchmarks } from './benchmarks';
+import { readdirSync } from 'fs';
 
 // Initialize SQLite database and schema
 const db = new Database('rules.db');
@@ -84,8 +85,24 @@ Bun.serve({
         const file = Bun.file('public/benchmark.html');
         return new Response(file, { headers: { 'Content-Type': 'text/html' } });
       }
+      if (req.method === 'GET' && url.pathname === '/benchmark-js') {
+        const file = Bun.file('public/benchmark-js.html');
+        return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+      }
+      if (req.method === 'GET' && url.pathname === '/benchmark-test-data') {
+        const file = Bun.file('public/benchmark-test-data.html');
+        return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+      }
 
-      if (req.method === 'GET' && (url.pathname === '/benchmark.js' || url.pathname === '/benchmark.css')) {
+      if (
+        req.method === 'GET' &&
+        (url.pathname === '/benchmark.js' ||
+          url.pathname === '/benchmark.css' ||
+          url.pathname === '/benchmark-js.js' ||
+          url.pathname === '/benchmark-js.css' ||
+          url.pathname === '/benchmark-test-data.js' ||
+          url.pathname === '/benchmark-test-data.css')
+      ) {
         const path = `public${url.pathname}`;
         const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
         const file = Bun.file(path);
@@ -93,6 +110,23 @@ Bun.serve({
           return new Response(file, { headers: { 'Content-Type': type } });
         }
       }
+
+    // List and serve test-data files
+    if (req.method === 'GET' && url.pathname === '/test-data') {
+      const files = readdirSync('test-data').filter((f) => f.endsWith('.json'));
+      return new Response(JSON.stringify(files), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/test-data/')) {
+      const name = decodeURIComponent(url.pathname.slice('/test-data/'.length));
+      const file = Bun.file(`test-data/${name}`);
+      if (await file.exists()) {
+        return new Response(file, { headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('Not found', { status: 404 });
+    }
 
     // Publish ruleset
     if (req.method === 'POST' && url.pathname === '/rulesets') {
@@ -184,14 +218,20 @@ Bun.serve({
         const propCount =
           Number(body.propCount) || (parts[0] ? Object.keys(parts[0]).length : 0);
         if (!Array.isArray(parts) || propCount === 0) {
-          return new Response('parts are required', { status: 400 });
+          return new Response(JSON.stringify({ error: 'parts are required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
         }
-        const result = await runner(engine, parts, iterations, propCount);
+        const result = await runner(engine, parts, iterations, propCount, body);
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (err: any) {
-        return new Response(String(err.message || err), { status: 500 });
+        return new Response(JSON.stringify({ error: err.message || String(err) }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
 
