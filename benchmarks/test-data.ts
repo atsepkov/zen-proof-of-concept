@@ -90,40 +90,72 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
         const inputs = content.inputs || [];
         const outputs = content.outputs || [];
         const rules = content.rules || [];
-        const compiledRules = rules.map((r: any) => {
-          const conds = inputs.map((inp: any) => {
-            const cond = r[inp.id];
-            if (!cond) return null;
-            const expr = `${inp.field} ${cond}`;
-            return new Function('input', `with(input){ return (${expr}); }`);
+        try {
+          const compiledRules = rules.map((r: any) => {
+            const conds = inputs.map((inp: any) => {
+              const cond = r[inp.id];
+              if (!cond) return null;
+              let expr: string = '';
+              if (typeof cond === 'string') {
+                const trimmed = cond.trim();
+                let arr: any;
+                try {
+                  arr = JSON.parse(`[${trimmed}]`);
+                } catch {}
+                if (
+                  Array.isArray(arr) &&
+                  arr.every((v: any) => ['string', 'number', 'boolean'].includes(typeof v))
+                ) {
+                  const arrExpr = `[${arr.map((v: any) => JSON.stringify(v)).join(',')}]`;
+                  expr = `${arrExpr}.includes(${inp.field})`;
+                } else {
+                  expr = `${inp.field} ${cond}`;
+                }
+              } else {
+                expr = `${inp.field} ${cond}`;
+              }
+              try {
+                return new Function('input', `with(input){ return (${expr}); }`);
+              } catch {
+                return null;
+              }
+            });
+            const outs = outputs
+              .map((out: any) => {
+                const val = r[out.id];
+                if (val === undefined) return null;
+                try {
+                  const fn = new Function('input', `with(input){ return (${val}); }`);
+                  return { key: out.field, fn };
+                } catch {
+                  return null;
+                }
+              })
+              .filter(Boolean);
+            return { conds, outs };
           });
-          const outs = outputs.map((out: any) => {
-            const val = r[out.id];
-            if (val === undefined) return null;
-            const fn = new Function('input', `with(input){ return (${val}); }`);
-            return { key: out.field, fn };
-          }).filter(Boolean);
-          return { conds, outs };
-        });
-        return async (input: any) => {
-          for (const rule of compiledRules) {
-            let match = true;
-            for (const cond of rule.conds) {
-              if (cond && !cond(input)) {
-                match = false;
-                break;
+          return async (input: any) => {
+            for (const rule of compiledRules) {
+              let match = true;
+              for (const cond of rule.conds) {
+                if (cond && !cond(input)) {
+                  match = false;
+                  break;
+                }
+              }
+              if (match) {
+                const result: any = {};
+                for (const out of rule.outs) {
+                  setByPath(result, out.key, out.fn(input));
+                }
+                return result;
               }
             }
-            if (match) {
-              const result: any = {};
-              for (const out of rule.outs) {
-                setByPath(result, out.key, out.fn(input));
-              }
-              return result;
-            }
-          }
-          return {};
-        };
+            return {};
+          };
+        } catch {
+          return null;
+        }
       }
       default:
         return null;
