@@ -58,6 +58,17 @@ def loader(key: str) -> bytes:
             (id, int(ver)),
         ).fetchone()
     if not row:
+        if ver == 'latest':
+            counts = cur.execute(
+                "SELECT status, COUNT(*) FROM rulesets WHERE id = ? GROUP BY status",
+                (id,)
+            ).fetchall()
+            if counts:
+                detail = ", ".join(
+                    f"{c} {s}{'' if c == 1 else 's'}" for s, c in counts
+                )
+                raise Exception(f"No active {key} rule exists ({detail})")
+            raise Exception(f"No rules found for {id}")
         raise Exception(f"JDM not found for {key}")
     return row[0].encode('utf-8')
 
@@ -242,7 +253,11 @@ async def benchmark_user_jdm(body: dict):
     key = body.get('key')
     if not isinstance(parts, list) or not key:
         raise HTTPException(status_code=400, detail='parts and key are required')
-    jdm = json.loads(loader(key))
+    try:
+        jdm_bytes = loader(key)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    jdm = json.loads(jdm_bytes)
     decision = engine.create_decision(jdm)
     decision.validate()
     handler = build_py_handler(jdm)
