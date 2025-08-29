@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from typing import List, Any
 from pathlib import Path
 import sqlite3
@@ -28,6 +28,20 @@ conn.execute(
 conn.execute(
     "CREATE INDEX IF NOT EXISTS rulesets_active_idx ON rulesets(id, status, version);"
 )
+conn.execute(
+    """
+    CREATE TABLE IF NOT EXISTS benchmarks (
+      name      TEXT NOT NULL,
+      language  TEXT NOT NULL,
+      parts     INTEGER NOT NULL,
+      ms        REAL NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """
+)
+conn.execute(
+    "CREATE INDEX IF NOT EXISTS benchmarks_idx ON benchmarks(name, language, parts, created_at);"
+)
 conn.commit()
 
 def loader(key: str) -> bytes:
@@ -50,12 +64,20 @@ def loader(key: str) -> bytes:
 engine = ZenEngine({'loader': loader})
 app = FastAPI()
 
+@app.get('/')
+async def root_page():
+    html = ("<h1>Zen Proof of Concept</h1>"
+            "<ul><li><a href='/editor'>Editor</a></li>"
+            "<li><a href='/analyze'>Analyze</a></li>"
+            "<li><a href='/benchmark'>Benchmark</a></li></ul>")
+    return HTMLResponse(content=f"<!DOCTYPE html><html><head><meta charset='utf-8'><title>Zen POC</title></head><body>{html}</body></html>")
+
 # -------- Static file helpers --------
 STATIC_FILES = {
     'editor.js', 'editor.css',
     'analyze.js', 'analyze.css',
     'benchmark.js', 'benchmark.css',
-    'benchmark-js.js', 'benchmark-js.css',
+    'benchmark-user.js', 'benchmark-user.css',
     'benchmark-test-data.js', 'benchmark-test-data.css'
 }
 
@@ -71,9 +93,9 @@ async def analyze_page():
 async def benchmark_page():
     return FileResponse(root / 'public' / 'benchmark.html', media_type='text/html')
 
-@app.get('/benchmark-js')
-async def benchmark_js_page():
-    return FileResponse(root / 'public' / 'benchmark-js.html', media_type='text/html')
+@app.get('/benchmark-user')
+async def benchmark_user_page():
+    return FileResponse(root / 'public' / 'benchmark-user.html', media_type='text/html')
 
 @app.get('/benchmark-test-data')
 async def benchmark_test_data_page():
@@ -197,12 +219,82 @@ async def benchmark_test_data(body: dict):
                 break
     else:
         mismatch = {'index': 0, 'python': None, 'zen': zen_outputs[0]}
+    conn.execute('INSERT INTO benchmarks (name, language, parts, ms) VALUES (?,?,?,?)',
+                 ('test-data', 'python', len(parts), py_time))
+    conn.commit()
+    row = conn.execute(
+        'SELECT ms FROM benchmarks WHERE name=? AND language=? AND parts=? ORDER BY created_at DESC LIMIT 1',
+        ('test-data', 'js', len(parts))
+    ).fetchone()
+    other = {'language': 'js', 'ms': row[0]} if row else None
 
     return {
         'python': py_time,
         'zen': zen_time,
         'sample': {'input': parts[0], 'python': py_outputs[0] if handler else None, 'zen': zen_outputs[0]},
-        'mismatch': mismatch
+        'mismatch': mismatch,
+        'other': other
+    }
+
+@app.post('/benchmark/user-jdm')
+async def benchmark_user_jdm(body: dict):
+    parts = body.get('parts')
+    key = body.get('key')
+    if not isinstance(parts, list) or not key:
+        raise HTTPException(status_code=400, detail='parts and key are required')
+    jdm = json.loads(loader(key))
+    decision = engine.create_decision(jdm)
+    decision.validate()
+    handler = build_py_handler(jdm)
+
+    def clone(obj):
+        return json.loads(json.dumps(obj))
+
+    py_outputs: List[Any] = []
+    py_time = 0.0
+    if handler:
+        start = time.perf_counter()
+        for p in parts:
+            py_outputs.append(handler(clone(p)))
+        py_time = (time.perf_counter() - start) * 1000
+
+    start = time.perf_counter()
+    zen_outputs: List[Any] = []
+    for p in parts:
+        res = decision.evaluate(clone(p))
+        zen_outputs.append(res.get('result') if isinstance(res, dict) else res)
+    zen_time = (time.perf_counter() - start) * 1000
+
+    mismatch = None
+    if handler:
+        def stable(o):
+            if isinstance(o, list):
+                return [stable(v) for v in o]
+            if isinstance(o, dict):
+                return {k: stable(o[k]) for k in sorted(o.keys())}
+            return o
+        for idx, (a, b) in enumerate(zip(py_outputs, zen_outputs)):
+            if json.dumps(stable(a)) != json.dumps(stable(b)):
+                mismatch = {'index': idx, 'python': a, 'zen': b}
+                break
+    else:
+        mismatch = {'index': 0, 'python': None, 'zen': zen_outputs[0]}
+
+    conn.execute('INSERT INTO benchmarks (name, language, parts, ms) VALUES (?,?,?,?)',
+                 ('user-jdm', 'python', len(parts), py_time))
+    conn.commit()
+    row = conn.execute(
+        'SELECT ms FROM benchmarks WHERE name=? AND language=? AND parts=? ORDER BY created_at DESC LIMIT 1',
+        ('user-jdm', 'js', len(parts))
+    ).fetchone()
+    other = {'language': 'js', 'ms': row[0]} if row else None
+
+    return {
+        'python': py_time,
+        'zen': zen_time,
+        'sample': {'input': parts[0], 'python': py_outputs[0] if handler else None, 'zen': zen_outputs[0]},
+        'mismatch': mismatch,
+        'other': other
     }
 
 # -------- Static assets fallback --------
