@@ -53,7 +53,9 @@ const App = () => {
     }
     // Include decision table input fields, switch node conditions, and expression references
     for (const n of jdm.nodes || []) {
-      if (n.type === 'decisionTableNode') {
+      if (n.type === 'inputNode') {
+        if (typeof n.name === 'string') props.add(n.name);
+      } else if (n.type === 'decisionTableNode') {
         for (const inp of n.content?.inputs || []) {
           if (typeof inp.field === 'string') props.add(inp.field);
           // check rules for string comparisons
