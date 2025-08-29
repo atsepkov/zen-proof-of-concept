@@ -40,7 +40,7 @@ const App = () => {
   };
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: '1rem' }}>
+    <div style={{ fontFamily: 'sans-serif', padding: '1rem', height: '1500px' }}>
       <h2>Zen Benchmark</h2>
       <div style={{ marginBottom: '0.5rem' }}>
         <label>

@@ -57,7 +57,31 @@ const App = () => {
     // Include decision table input fields, switch node conditions, and expression references
     for (const n of jdm.nodes || []) {
       if (n.type === 'inputNode') {
-        if (typeof n.name === 'string') props.add(n.name);
+        const schemaStr = n.content?.schema;
+        if (typeof schemaStr === 'string') {
+          try {
+            const schema = JSON.parse(schemaStr);
+            const walk = (sch: any, prefix: string) => {
+              if (sch && typeof sch === 'object' && sch.type === 'object') {
+                const required: string[] = sch.required || [];
+                for (const key of required) {
+                  const child = sch.properties?.[key];
+                  const p = prefix ? `${prefix}.${key}` : key;
+                  props.add(p);
+                  if (child?.type === 'array') arrays.add(p);
+                  if (child?.type === 'string') strings.add(p);
+                  if (Array.isArray(child?.enum)) enums.set(p, child.enum);
+                  if (typeof child?.minimum === 'number') numberMins.set(p, child.minimum);
+                  if (typeof child?.format === 'string') formats.set(p, child.format);
+                  walk(child, p);
+                }
+              }
+            };
+            walk(schema, '');
+          } catch {}
+        } else if (typeof n.name === 'string') {
+          props.add(n.name);
+        }
       } else if (n.type === 'decisionTableNode') {
         for (const inp of n.content?.inputs || []) {
           if (typeof inp.field === 'string') props.add(inp.field);
@@ -209,7 +233,7 @@ const App = () => {
   };
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: '1rem' }}>
+    <div style={{ fontFamily: 'sans-serif', padding: '1rem', height: '1500px' }}>
       <h2>Test Data Benchmark</h2>
       <div>
         <select
