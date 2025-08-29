@@ -78,15 +78,6 @@ async def benchmark_js_page():
 async def benchmark_test_data_page():
     return FileResponse(root / 'public' / 'benchmark-test-data.html', media_type='text/html')
 
-@app.get('/{name}')
-async def static_assets(name: str):
-    if name in STATIC_FILES:
-        path = root / 'public' / name
-        if path.exists():
-            media = 'text/css' if name.endswith('.css') else 'text/javascript'
-            return FileResponse(path, media_type=media)
-    raise HTTPException(status_code=404, detail='Not found')
-
 # -------- Test data endpoints --------
 @app.get('/test-data')
 async def list_test_data():
@@ -185,3 +176,13 @@ async def benchmark_test_data(body: dict):
         'sample': {'input': parts[0], 'js': None, 'zen': outputs[0]},
         'mismatch': None
     }
+
+# -------- Static assets fallback --------
+@app.get('/{name}')
+async def static_assets(name: str):
+    if name in STATIC_FILES:
+        path = root / 'public' / name
+        if path.exists():
+            media = 'text/css' if name.endswith('.css') else 'text/javascript'
+            return FileResponse(path, media_type=media)
+    raise HTTPException(status_code=404, detail='Not found')
