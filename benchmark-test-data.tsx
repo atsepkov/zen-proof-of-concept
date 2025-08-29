@@ -145,20 +145,13 @@ const App = () => {
               }
             };
             walk(schema);
-            let prefix = '';
-            const edge = (jdm.edges || []).find((e: any) => e.targetId === n.id);
-            const srcNode = jdm.nodes?.find((m: any) => m.id === edge?.sourceId);
-            if (srcNode && srcNode.type === 'inputNode' && typeof srcNode.name === 'string') {
-              prefix = srcNode.name;
-            }
             for (const { path, schema: sch } of reqs) {
-              const full = prefix ? `${prefix}.${path}` : path;
-              props.add(full);
-              if (sch?.type === 'array') arrays.add(full);
-              if (sch?.type === 'string') strings.add(full);
-              if (Array.isArray(sch?.enum)) enums.set(full, sch.enum);
-              if (typeof sch?.minimum === 'number') numberMins.set(full, sch.minimum);
-              if (typeof sch?.format === 'string') formats.set(full, sch.format);
+              props.add(path);
+              if (sch?.type === 'array') arrays.add(path);
+              if (sch?.type === 'string') strings.add(path);
+              if (Array.isArray(sch?.enum)) enums.set(path, sch.enum);
+              if (typeof sch?.minimum === 'number') numberMins.set(path, sch.minimum);
+              if (typeof sch?.format === 'string') formats.set(path, sch.format);
             }
           } catch {}
         }
