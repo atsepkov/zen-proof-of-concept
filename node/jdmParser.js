@@ -285,10 +285,8 @@ export function buildJsHandler(jdm) {
         break;
       }
       default:
-        impl = null;
+        impl = async () => ({});
     }
-
-    if (!impl) return null;
     return async (ctx) => {
       for (const [sid, handle] of Object.entries(guard)) {
         if (ctx[`__switch_${sid}`] !== handle) return {};
@@ -297,9 +295,9 @@ export function buildJsHandler(jdm) {
     };
   });
 
-  if (fns.some((f) => !f)) return null;
-
-  const handlers = order.map((n, i) => ({ id: n.id, fn: fns[i] }));
+  const handlers = order
+    .map((n, i) => ({ id: n.id, fn: fns[i] }))
+    .filter((h) => !!h.fn);
 
   return async (input) => {
     const ctx = JSON.parse(JSON.stringify(input));

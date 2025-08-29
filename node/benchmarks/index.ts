@@ -1,5 +1,5 @@
 import type { ZenEngine } from '@gorules/zen-engine';
-import { runBenchmark as runArbitraryJs } from './arbitrary-js';
+import { runBenchmark as runUserJdm } from './user-jdm';
 import { runBenchmark as runTestData } from './test-data';
 
 export type BenchmarkRunner = (
@@ -11,7 +11,7 @@ export type BenchmarkRunner = (
 ) => Promise<any>;
 
 export const benchmarks: Record<string, BenchmarkRunner> = {
-  'arbitrary-js': runArbitraryJs,
+  'user-jdm': runUserJdm,
   'test-data': runTestData
   // Additional benchmark strategies can be added here
 };

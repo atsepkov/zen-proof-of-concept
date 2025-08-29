@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS rulesets (
   PRIMARY KEY (id, version)
 );
 CREATE INDEX IF NOT EXISTS rulesets_active_idx ON rulesets(id, status, version);
+CREATE TABLE IF NOT EXISTS benchmarks (
+  name      TEXT NOT NULL,
+  language  TEXT NOT NULL,
+  parts     INTEGER NOT NULL,
+  ms        REAL NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS benchmarks_idx ON benchmarks(name, language, parts, created_at);
 `);
 
 const loader = async (key: string) => {
@@ -53,6 +61,11 @@ Bun.serve({
   idleTimeout: 240,
   async fetch(req) {
     const url = new URL(req.url);
+
+    if (req.method === 'GET' && url.pathname === '/') {
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Zen POC</title></head><body><h1>Zen Proof of Concept</h1><ul><li><a href="/editor">Editor</a></li><li><a href="/analyze">Analyze</a></li><li><a href="/benchmark">Benchmark</a></li></ul></body></html>`;
+      return new Response(html, { headers: { 'Content-Type': 'text/html' } });
+    }
 
     // Serve editor assets
     if (req.method === 'GET' && url.pathname === '/editor') {
@@ -89,8 +102,8 @@ Bun.serve({
         const file = Bun.file(join(root, 'public', 'benchmark.html'));
         return new Response(file, { headers: { 'Content-Type': 'text/html' } });
       }
-      if (req.method === 'GET' && url.pathname === '/benchmark-js') {
-        const file = Bun.file(join(root, 'public', 'benchmark-js.html'));
+      if (req.method === 'GET' && url.pathname === '/benchmark-user') {
+        const file = Bun.file(join(root, 'public', 'benchmark-user.html'));
         return new Response(file, { headers: { 'Content-Type': 'text/html' } });
       }
       if (req.method === 'GET' && url.pathname === '/benchmark-test-data') {
@@ -102,8 +115,8 @@ Bun.serve({
         req.method === 'GET' &&
         (url.pathname === '/benchmark.js' ||
           url.pathname === '/benchmark.css' ||
-          url.pathname === '/benchmark-js.js' ||
-          url.pathname === '/benchmark-js.css' ||
+          url.pathname === '/benchmark-user.js' ||
+          url.pathname === '/benchmark-user.css' ||
           url.pathname === '/benchmark-test-data.js' ||
           url.pathname === '/benchmark-test-data.css')
       ) {
@@ -234,7 +247,32 @@ Bun.serve({
             headers: { 'Content-Type': 'application/json' }
           });
         }
-        const result = await runner(engine, parts, iterations, propCount, body);
+        let extra: any = body;
+        if (name === 'user-jdm') {
+          const key = body.key as string;
+          if (!key) {
+            return new Response(JSON.stringify({ error: 'key is required' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          const bytes = await loader(key);
+          extra = { ...body, jdm: JSON.parse(bytes.toString()) };
+        }
+        const result = await runner(engine, parts, iterations, propCount, extra);
+        if (typeof result.js === 'number') {
+          db.query(
+            'INSERT INTO benchmarks (name, language, parts, ms) VALUES (?, ?, ?, ?)'
+          ).run(name, 'js', parts.length, result.js);
+          const other = db
+            .query(
+              'SELECT ms FROM benchmarks WHERE name = ? AND language = ? AND parts = ? ORDER BY created_at DESC LIMIT 1'
+            )
+            .get(name, 'python', parts.length) as any;
+          if (other) {
+            result.other = { language: 'python', ms: other.ms };
+          }
+        }
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json' }
         });

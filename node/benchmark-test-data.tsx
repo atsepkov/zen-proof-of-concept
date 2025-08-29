@@ -287,6 +287,11 @@ const App = () => {
                   {label}: {(results as any)[key].toFixed(3)} ms
                 </p>
                 <p>Zen: {results.zen.toFixed(3)} ms</p>
+                {results.other && (
+                  <p>
+                    Last {results.other.language === 'python' ? 'Python' : 'JS'} run: {results.other.ms.toFixed(3)} ms
+                  </p>
+                )}
                 <h4>Sample Output</h4>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <div>
