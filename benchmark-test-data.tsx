@@ -256,8 +256,6 @@ const App = () => {
         <div style={{ marginTop: '1rem' }}>
           <p>JS: {results.js.toFixed(3)} ms</p>
           <p>Zen: {results.zen.toFixed(3)} ms</p>
-          <h4>Sample Input</h4>
-          <pre>{JSON.stringify(results.sample.input, null, 2)}</pre>
           <h4>Sample Output</h4>
           <div style={{ display: 'flex', gap: '1rem' }}>
             <div>
