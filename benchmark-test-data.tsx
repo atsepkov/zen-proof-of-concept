@@ -35,6 +35,7 @@ const App = () => {
 
     const props = new Set<string>();
     const arrays = new Set<string>();
+    const strings = new Set<string>();
     const src = JSON.stringify(jdm);
     const reserved = new Set([
       'true',
@@ -55,15 +56,34 @@ const App = () => {
       if (n.type === 'decisionTableNode') {
         for (const inp of n.content?.inputs || []) {
           if (typeof inp.field === 'string') props.add(inp.field);
+          // check rules for string comparisons
+          const rules = n.content?.rules || [];
+          for (const r of rules) {
+            const cond = r[inp.id];
+            if (typeof cond === 'string' && /['"]/g.test(cond)) {
+              strings.add(inp.field);
+            }
+          }
         }
       } else if (n.type === 'switchNode') {
         for (const st of n.content?.statements || []) {
           const cond = typeof st.condition === 'string' ? st.condition : '';
-          // strip string literals to avoid capturing quoted text
           const cleaned = cond.replace(/(['"])(?:\\.|[^\\])*?\1/g, '');
           for (const m of cleaned.match(/[a-zA-Z_][a-zA-Z0-9_.]*/g) || []) {
             if (!reserved.has(m)) {
               props.add(m);
+            }
+          }
+          // detect string operations like color == 'red'
+          const stringPatterns = [
+            /([a-zA-Z0-9_.]+)\s*(?:===|==|!==|!=)\s*(['"][^'"]*['"])/g,
+            /(['"][^'"]*['"])\s*(?:===|==|!==|!=)\s*([a-zA-Z0-9_.]+)/g
+          ];
+          for (const re of stringPatterns) {
+            let m;
+            while ((m = re.exec(cond)) !== null) {
+              const id = m[1].startsWith("'") || m[1].startsWith('"') ? m[2] : m[1];
+              if (!reserved.has(id)) strings.add(id);
             }
           }
         }
@@ -79,6 +99,20 @@ const App = () => {
                 props.add(prop);
                 arrays.add(prop);
               }
+            }
+          }
+          // detect string concatenation and comparisons
+          const stringPatterns = [
+            /([a-zA-Z0-9_.]+)\s*\+\s*(['"][^'"]*['"])/g,
+            /(['"][^'"]*['"])\s*\+\s*([a-zA-Z0-9_.]+)/g,
+            /([a-zA-Z0-9_.]+)\s*(?:===|==|!==|!=)\s*(['"][^'"]*['"])/g,
+            /(['"][^'"]*['"])\s*(?:===|==|!==|!=)\s*([a-zA-Z0-9_.]+)/g
+          ];
+          for (const re of stringPatterns) {
+            let m;
+            while ((m = re.exec(val)) !== null) {
+              const id = m[1].startsWith("'") || m[1].startsWith('"') ? m[2] : m[1];
+              if (!reserved.has(id)) strings.add(id);
             }
           }
           const cleaned = val.replace(/(['"])(?:\\.|[^\\])*?\1/g, '');
@@ -100,6 +134,8 @@ const App = () => {
             p,
             Array.from({ length: 5 }, () => Math.floor(Math.random() * 100))
           );
+        } else if (strings.has(p)) {
+          setByPath(obj, p, Math.random().toString(36).slice(2, 8));
         } else {
           setByPath(obj, p, Math.floor(Math.random() * 100));
         }
