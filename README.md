@@ -36,12 +36,17 @@ files.
 
 ## Running
 
+Both servers rely on the same React frontend built with Bun. Build the shared
+assets once from the repository root:
+
+```bash
+./build-ui   # installs dependencies and outputs to public/
+```
+
 ### Bun / Node
 
 ```bash
 cd node
-bun install
-bun run build:ui   # build frontend assets into ../public
 bun run index.ts
 ```
 
