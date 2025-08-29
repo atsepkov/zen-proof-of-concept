@@ -17,25 +17,62 @@ function setByPath(obj: any, path: string, value: any) {
 function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
   const nodes = new Map(jdm.nodes.map((n: any) => [n.id, n]));
   const edges = jdm.edges || [];
-  const getNext = (id: string) => edges.find((e: any) => e.sourceId === id)?.targetId;
-  let node = jdm.nodes.find((n: any) => n.type === 'inputNode');
-  if (!node) return null;
-  const steps: any[] = [];
-  while (true) {
-    const nextId = getNext(node.id);
-    if (!nextId) break;
-    node = nodes.get(nextId);
-    if (!node || node.type === 'outputNode') break;
-    steps.push(node);
+  const inputNode = jdm.nodes.find((n: any) => n.type === 'inputNode');
+  const outputNode = jdm.nodes.find((n: any) => n.type === 'outputNode');
+  if (!inputNode) return null;
+
+  const outgoing = new Map<string, string[]>();
+  const indegree = new Map<string, number>();
+  for (const n of jdm.nodes) {
+    outgoing.set(n.id, []);
+    indegree.set(n.id, 0);
+  }
+  for (const e of edges) {
+    outgoing.get(e.sourceId)?.push(e.targetId);
+    indegree.set(e.targetId, (indegree.get(e.targetId) || 0) + 1);
   }
 
-  const fns = steps.map((n) => {
+  const order: any[] = [];
+  const queue: string[] = [inputNode.id];
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const next of outgoing.get(id) || []) {
+      indegree.set(next, (indegree.get(next) || 0) - 1);
+      if (indegree.get(next) === 0) {
+        const node = nodes.get(next);
+        if (node && node.type !== 'outputNode') {
+          order.push(node);
+        }
+        queue.push(next);
+      }
+    }
+  }
+
+  const outputSources = new Set(
+    edges
+      .filter((e: any) => e.targetId === outputNode?.id)
+      .map((e: any) => e.sourceId)
+  );
+
+  function merge(target: any, src: any) {
+    for (const key of Object.keys(src)) {
+      const val = src[key];
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        if (!target[key] || typeof target[key] !== 'object') target[key] = {};
+        merge(target[key], val);
+      } else {
+        target[key] = val;
+      }
+    }
+  }
+
+  const fns = order.map((n) => {
     switch (n.type) {
       case 'functionNode': {
         if (typeof n.content === 'string') {
           try {
             const fn = new Function(`${n.content}; return handler;`)();
-            return async (input: any) => fn(input, {});
+            return async (ctx: any) => fn(ctx, {});
           } catch {
             return null;
           }
@@ -75,11 +112,12 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
             );
             return { key: e.key, fn };
           });
-          return async (input: any) => {
+          return async (ctx: any) => {
+            const result: any = {};
             for (const { key, fn } of compiled) {
-              setByPath(input, key, fn(input, helpers));
+              setByPath(result, key, fn(ctx, helpers));
             }
-            return input;
+            return result;
           };
         } catch {
           return null;
@@ -93,26 +131,31 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
         try {
           const compiledRules = rules.map((r: any) => {
             const conds = inputs.map((inp: any) => {
-              const cond = r[inp.id];
-              if (!cond) return null;
-              let expr: string = '';
-              if (typeof cond === 'string') {
-                const trimmed = cond.trim();
-                let arr: any;
-                try {
-                  arr = JSON.parse(`[${trimmed}]`);
-                } catch {}
-                if (
-                  Array.isArray(arr) &&
-                  arr.every((v: any) => ['string', 'number', 'boolean'].includes(typeof v))
-                ) {
-                  const arrExpr = `[${arr.map((v: any) => JSON.stringify(v)).join(',')}]`;
-                  expr = `${arrExpr}.includes(${inp.field})`;
+              const raw = r[inp.id];
+              if (raw === undefined || raw === '') return null;
+              let expr = '';
+              if (typeof raw === 'string') {
+                const trimmed = raw.trim().replace(/_/g, '');
+                const range = trimmed.match(/^\[(.+)\.\.(.+)\]$/);
+                if (range) {
+                  expr = `${inp.field} >= ${range[1]} && ${inp.field} <= ${range[2]}`;
                 } else {
-                  expr = `${inp.field} ${cond}`;
+                  let arr: any;
+                  try {
+                    arr = JSON.parse(`[${trimmed}]`);
+                  } catch {}
+                  if (
+                    Array.isArray(arr) &&
+                    arr.every((v: any) => ['string', 'number', 'boolean'].includes(typeof v))
+                  ) {
+                    const arrExpr = `[${arr.map((v: any) => JSON.stringify(v)).join(',')}]`;
+                    expr = `${arrExpr}.includes(${inp.field})`;
+                  } else {
+                    expr = `${inp.field} ${trimmed}`;
+                  }
                 }
               } else {
-                expr = `${inp.field} ${cond}`;
+                expr = `${inp.field} ${raw}`;
               }
               try {
                 return new Function('input', `with(input){ return (${expr}); }`);
@@ -134,11 +177,11 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
               .filter(Boolean);
             return { conds, outs };
           });
-          return async (input: any) => {
+          return async (ctx: any) => {
             for (const rule of compiledRules) {
               let match = true;
               for (const cond of rule.conds) {
-                if (cond && !cond(input)) {
+                if (cond && !cond(ctx)) {
                   match = false;
                   break;
                 }
@@ -146,7 +189,7 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
               if (match) {
                 const result: any = {};
                 for (const out of rule.outs) {
-                  setByPath(result, out.key, out.fn(input));
+                  setByPath(result, out.key, out.fn(ctx));
                 }
                 return result;
               }
@@ -164,12 +207,19 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
 
   if (fns.some((f) => !f)) return null;
 
+  const handlers = order.map((n, i) => ({ id: n.id, fn: fns[i] }));
+
   return async (input: any) => {
-    let ctx = input;
-    for (const fn of fns) {
-      ctx = await fn(ctx);
+    const ctx = JSON.parse(JSON.stringify(input));
+    const output: any = {};
+    for (const { id, fn } of handlers) {
+      const res = await fn!(ctx);
+      if (res && typeof res === 'object') {
+        merge(ctx, res);
+        if (outputSources.has(id)) merge(output, res);
+      }
     }
-    return ctx;
+    return output;
   };
 }
 
@@ -212,8 +262,19 @@ export async function runBenchmark(
 
   let mismatch: any = null;
   if (jsHandler) {
+    const stable = (obj: any): any => {
+      if (Array.isArray(obj)) return obj.map(stable);
+      if (obj && typeof obj === 'object') {
+        const out: any = {};
+        for (const key of Object.keys(obj).sort()) {
+          out[key] = stable(obj[key]);
+        }
+        return out;
+      }
+      return obj;
+    };
     for (let i = 0; i < parts.length; i++) {
-      if (JSON.stringify(jsOutputs[i]) !== JSON.stringify(zenOutputs[i])) {
+      if (JSON.stringify(stable(jsOutputs[i])) !== JSON.stringify(stable(zenOutputs[i]))) {
         mismatch = { index: i, js: jsOutputs[i], zen: zenOutputs[i] };
         break;
       }
