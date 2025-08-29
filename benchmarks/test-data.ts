@@ -69,9 +69,16 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
   const fns = order.map((n) => {
     switch (n.type) {
       case 'functionNode': {
-        if (typeof n.content === 'string') {
+        const src =
+          typeof n.content === 'string'
+            ? n.content
+            : typeof n.content?.source === 'string'
+            ? n.content.source
+            : null;
+        if (src) {
           try {
-            const fn = new Function(`${n.content}; return handler;`)();
+            const body = src.replace(/\bexport\s+/g, '');
+            const fn = new Function(`${body}; return handler;`)();
             return async (ctx: any) => fn(ctx, {});
           } catch {
             return null;
@@ -242,23 +249,24 @@ export async function runBenchmark(
   const clone = (obj: any) => JSON.parse(JSON.stringify(obj));
 
   const jsOutputs: any[] = [];
-  let start = performance.now();
+  let jsTime = 0;
   if (jsHandler) {
+    let start = performance.now();
     for (const p of parts) {
       const out = await jsHandler(clone(p));
       jsOutputs.push(out);
     }
+    let end = performance.now();
+    jsTime = end - start;
   }
-  let end = performance.now();
-  const jsTime = end - start;
 
   const zenOutputs: any[] = [];
-  start = performance.now();
+  let start = performance.now();
   for (const p of parts) {
     const res = await decision.evaluate(clone(p));
     zenOutputs.push((res as any)?.result ?? res);
   }
-  end = performance.now();
+  let end = performance.now();
   const zenTime = end - start;
 
   let mismatch: any = null;
@@ -280,6 +288,8 @@ export async function runBenchmark(
         break;
       }
     }
+  } else {
+    mismatch = { index: 0, js: null, zen: zenOutputs[0] };
   }
 
   return {
