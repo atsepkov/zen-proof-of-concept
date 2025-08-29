@@ -248,12 +248,50 @@ const App = () => {
           <button onClick={run} disabled={running} style={{ opacity: running ? 0.5 : 1 }}>
             {running ? 'Running…' : 'Run Benchmark'}
           </button>
+          <h4 style={{ marginTop: '1rem' }}>Sample Input</h4>
+          <pre>{JSON.stringify(items[0], null, 2)}</pre>
         </div>
       )}
       {results && (
         <div style={{ marginTop: '1rem' }}>
           <p>JS: {results.js.toFixed(3)} ms</p>
           <p>Zen: {results.zen.toFixed(3)} ms</p>
+          <h4>Sample Input</h4>
+          <pre>{JSON.stringify(results.sample.input, null, 2)}</pre>
+          <h4>Sample Output</h4>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <div>
+              <h5>JS</h5>
+              <pre>
+                {results.sample.js !== null
+                  ? JSON.stringify(results.sample.js, null, 2)
+                  : 'N/A'}
+              </pre>
+            </div>
+            <div>
+              <h5>Zen</h5>
+              <pre>{JSON.stringify(results.sample.zen, null, 2)}</pre>
+            </div>
+          </div>
+          {results.mismatch ? (
+            <div style={{ marginTop: '1rem' }}>
+              <p style={{ color: 'red' }}>
+                Mismatch at index {results.mismatch.index}
+              </p>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <div>
+                  <h5>JS</h5>
+                  <pre>{JSON.stringify(results.mismatch.js, null, 2)}</pre>
+                </div>
+                <div>
+                  <h5>Zen</h5>
+                  <pre>{JSON.stringify(results.mismatch.zen, null, 2)}</pre>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p>All outputs matched.</p>
+          )}
         </div>
       )}
     </div>

@@ -188,21 +188,46 @@ export async function runBenchmark(
 
   const jsHandler = buildJsHandler(jdm);
 
+  const clone = (obj: any) => JSON.parse(JSON.stringify(obj));
+
+  const jsOutputs: any[] = [];
   let start = performance.now();
   if (jsHandler) {
     for (const p of parts) {
-      await jsHandler(p);
+      const out = await jsHandler(clone(p));
+      jsOutputs.push(out);
     }
   }
   let end = performance.now();
   const jsTime = end - start;
 
+  const zenOutputs: any[] = [];
   start = performance.now();
   for (const p of parts) {
-    await decision.evaluate(p);
+    const res = await decision.evaluate(clone(p));
+    zenOutputs.push((res as any)?.result ?? res);
   }
   end = performance.now();
   const zenTime = end - start;
 
-  return { js: jsTime, zen: zenTime };
+  let mismatch: any = null;
+  if (jsHandler) {
+    for (let i = 0; i < parts.length; i++) {
+      if (JSON.stringify(jsOutputs[i]) !== JSON.stringify(zenOutputs[i])) {
+        mismatch = { index: i, js: jsOutputs[i], zen: zenOutputs[i] };
+        break;
+      }
+    }
+  }
+
+  return {
+    js: jsTime,
+    zen: zenTime,
+    sample: {
+      input: parts[0],
+      js: jsHandler ? jsOutputs[0] : null,
+      zen: zenOutputs[0]
+    },
+    mismatch
+  };
 }
