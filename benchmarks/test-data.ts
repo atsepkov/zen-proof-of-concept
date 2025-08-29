@@ -212,6 +212,7 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
   return async (input: any) => {
     const ctx = JSON.parse(JSON.stringify(input));
     const output: any = {};
+    if (outputSources.has(inputNode.id)) merge(output, ctx);
     for (const { id, fn } of handlers) {
       const res = await fn!(ctx);
       if (res && typeof res === 'object') {
