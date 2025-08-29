@@ -183,8 +183,9 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
                   expr = `${inp.field} >= ${range[1]} && ${inp.field} <= ${range[2]}`;
                 } else {
                   let arr: any;
+                  const normalized = trimmed.replace(/'/g, '"');
                   try {
-                    arr = JSON.parse(`[${trimmed}]`);
+                    arr = JSON.parse(`[${normalized}]`);
                   } catch {}
                   if (
                     Array.isArray(arr) &&
@@ -192,6 +193,16 @@ function buildJsHandler(jdm: any): ((input: any) => Promise<any>) | null {
                   ) {
                     const arrExpr = `[${arr.map((v: any) => JSON.stringify(v)).join(',')}]`;
                     expr = `${arrExpr}.includes(${inp.field})`;
+                  } else if (/^endsWith\(\$,\s*(.+)\)$/.test(trimmed)) {
+                    const arg = trimmed.match(/^endsWith\(\$,\s*(.+)\)$/)![1].replace(/'/g, '"');
+                    expr = `${inp.field}.endsWith(${arg})`;
+                  } else if (/^startsWith\(\$,\s*(.+)\)$/.test(trimmed)) {
+                    const arg = trimmed.match(/^startsWith\(\$,\s*(.+)\)$/)![1].replace(/'/g, '"');
+                    expr = `${inp.field}.startsWith(${arg})`;
+                  } else if (/^['"].*['"]$/.test(trimmed)) {
+                    expr = `${inp.field} === ${normalized}`;
+                  } else if (trimmed.includes('$')) {
+                    expr = trimmed.replace(/\$/g, inp.field);
                   } else {
                     expr = `${inp.field} ${trimmed}`;
                   }
