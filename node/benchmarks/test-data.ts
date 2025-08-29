@@ -1,5 +1,8 @@
 import type { ZenEngine } from '@gorules/zen-engine';
 import { promises as fs } from 'fs';
+import { join } from 'path';
+
+const root = join(import.meta.dir, '..', '..');
 
 function setByPath(obj: any, path: string, value: any) {
   const parts = path.split('.');
@@ -331,7 +334,7 @@ export async function runBenchmark(
   extra: any
 ) {
   const file = extra.file as string;
-  const text = await fs.readFile(`test-data/${file}`, 'utf8');
+  const text = await fs.readFile(join(root, 'test-data', file), 'utf8');
   const jdm = JSON.parse(text);
   const decision = engine.createDecision(jdm);
   decision.validate();

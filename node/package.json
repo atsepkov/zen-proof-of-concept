@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build:ui": "node fix-zen-wasm.js && bun build editor.tsx analyze.tsx benchmark.tsx benchmark-js.tsx benchmark-test-data.tsx --outdir public",
+    "build:ui": "node fix-zen-wasm.js && bun build editor.tsx analyze.tsx benchmark.tsx benchmark-js.tsx benchmark-test-data.tsx --outdir ../public",
     "postinstall": "node fix-zen-wasm.js",
     "remote": "node remote-engine.js"
   },

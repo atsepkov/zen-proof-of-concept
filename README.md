@@ -1,13 +1,14 @@
 
-# Zen Engine Bun Server POC
+# Zen Engine Server POC
 
-This repository contains a minimal [Bun](https://bun.sh/) server that stores and
-serves JSON Decision Model (JDM) rules using [GoRules Zen Engine](https://gorules.com/).
-The `/editor` endpoint hosts the React-based
-[`@gorules/jdm-editor`](https://github.com/gorules/jdm-editor) component to
-craft JDM documents in the browser and publish them to a local SQLite database.
-The `/analyze` endpoint showcases executing the rules against generated test
-data using Zen Engine.
+This repository provides two implementations of the same rule server that
+uses [GoRules Zen Engine](https://gorules.com/):
+
+- **`node/`** – [Bun](https://bun.sh/) TypeScript server
+- **`python/`** – [FastAPI](https://fastapi.tiangolo.com/) server
+
+Both servers share the `public/` frontend assets and `test-data/` benchmark
+files.
 
 ## Architecture
 ![Architecture](zen-poc.png)
@@ -35,28 +36,29 @@ data using Zen Engine.
 
 ## Running
 
+### Bun / Node
+
 ```bash
+cd node
 bun install
-bun run build:ui   # build frontend assets
+bun run build:ui   # build frontend assets into ../public
 bun run index.ts
 ```
 
-The server listens on <http://localhost:3000>. Opening `/editor` loads the
+### Python
+
+```bash
+cd python
+pip install -r requirements.txt
+uvicorn main:app --reload --port 3000
+```
+
+Either server listens on <http://localhost:3000>. Opening `/editor` loads the
 JDM editor while `/analyze` allows running generated data through the rules
 engine.
 
 ## Benchmarking
 
-Benchmark implementations live in the `benchmarks/` directory. Each strategy
-exposes a `POST /benchmark/<name>` endpoint and can be invoked with the
-benchmark page or directly via HTTP.
-
-Current strategies:
-
-- `arbitrary-js` – builds Zen decisions from arbitrary JavaScript expressions to
-  compare native execution with Zen expression and decision table equivalents.
-  The frontend page posts to `/benchmark/arbitrary-js`.
-
-Additional strategies such as ported GoRules examples can be added under the
-same directory and exposed through their own `/benchmark/<name>` endpoint.
+Benchmark implementations live in `node/benchmarks/` and a compatible Python
+version of the **test-data** benchmark is exposed at `POST /benchmark/test-data`.
 
