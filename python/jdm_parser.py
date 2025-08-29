@@ -53,7 +53,12 @@ def eval_with_ctx(expr: str, ctx: Dict[str, Any]) -> Any:
         'reduce_': reduce_,
     }
     env.update(vars(ns))
-    env['input'] = ns
+    # Unlike the Node implementation, Python evaluates expressions directly
+    # against the provided context. Setting ``input`` to the entire namespace
+    # overrides any real ``input`` field in the payload, leading to type errors
+    # when a decision table references that field. By exposing only the context
+    # variables themselves, expressions like ``input > 10`` correctly resolve to
+    # the value from the payload instead of the root object.
     return eval(expr, {"__builtins__": {}}, env)
 
 
