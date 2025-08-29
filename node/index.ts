@@ -2,9 +2,13 @@ import { Database } from 'bun:sqlite';
 import { ZenEngine } from '@gorules/zen-engine';
 import { benchmarks } from './benchmarks';
 import { readdirSync } from 'fs';
+import { join } from 'path';
+
+// Resolve paths relative to repo root
+const root = join(import.meta.dir, '..');
 
 // Initialize SQLite database and schema
-const db = new Database('rules.db');
+const db = new Database(join(root, 'rules.db'));
 db.exec(`
 CREATE TABLE IF NOT EXISTS rulesets (
   id        TEXT NOT NULL,
@@ -52,12 +56,12 @@ Bun.serve({
 
     // Serve editor assets
     if (req.method === 'GET' && url.pathname === '/editor') {
-      const file = Bun.file('public/editor.html');
+      const file = Bun.file(join(root, 'public', 'editor.html'));
       return new Response(file, { headers: { 'Content-Type': 'text/html' } });
     }
 
     if (req.method === 'GET' && (url.pathname === '/editor.js' || url.pathname === '/editor.css')) {
-      const path = `public${url.pathname}`;
+      const path = join(root, 'public', url.pathname);
       const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
       const file = Bun.file(path);
       if (await file.exists()) {
@@ -67,12 +71,12 @@ Bun.serve({
 
       // Serve analyze assets
       if (req.method === 'GET' && url.pathname === '/analyze') {
-        const file = Bun.file('public/analyze.html');
+        const file = Bun.file(join(root, 'public', 'analyze.html'));
         return new Response(file, { headers: { 'Content-Type': 'text/html' } });
       }
 
       if (req.method === 'GET' && (url.pathname === '/analyze.js' || url.pathname === '/analyze.css')) {
-        const path = `public${url.pathname}`;
+        const path = join(root, 'public', url.pathname);
         const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
         const file = Bun.file(path);
         if (await file.exists()) {
@@ -82,15 +86,15 @@ Bun.serve({
 
       // Serve benchmark assets
       if (req.method === 'GET' && url.pathname === '/benchmark') {
-        const file = Bun.file('public/benchmark.html');
+        const file = Bun.file(join(root, 'public', 'benchmark.html'));
         return new Response(file, { headers: { 'Content-Type': 'text/html' } });
       }
       if (req.method === 'GET' && url.pathname === '/benchmark-js') {
-        const file = Bun.file('public/benchmark-js.html');
+        const file = Bun.file(join(root, 'public', 'benchmark-js.html'));
         return new Response(file, { headers: { 'Content-Type': 'text/html' } });
       }
       if (req.method === 'GET' && url.pathname === '/benchmark-test-data') {
-        const file = Bun.file('public/benchmark-test-data.html');
+        const file = Bun.file(join(root, 'public', 'benchmark-test-data.html'));
         return new Response(file, { headers: { 'Content-Type': 'text/html' } });
       }
 
@@ -103,7 +107,7 @@ Bun.serve({
           url.pathname === '/benchmark-test-data.js' ||
           url.pathname === '/benchmark-test-data.css')
       ) {
-        const path = `public${url.pathname}`;
+        const path = join(root, 'public', url.pathname);
         const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
         const file = Bun.file(path);
         if (await file.exists()) {
@@ -113,7 +117,7 @@ Bun.serve({
 
     // List and serve test-data files
     if (req.method === 'GET' && url.pathname === '/test-data') {
-      const files = readdirSync('test-data').filter((f) => f.endsWith('.json'));
+      const files = readdirSync(join(root, 'test-data')).filter((f) => f.endsWith('.json'));
       return new Response(JSON.stringify(files), {
         headers: { 'Content-Type': 'application/json' }
       });
@@ -121,7 +125,7 @@ Bun.serve({
 
     if (req.method === 'GET' && url.pathname.startsWith('/test-data/')) {
       const name = decodeURIComponent(url.pathname.slice('/test-data/'.length));
-      const file = Bun.file(`test-data/${name}`);
+      const file = Bun.file(join(root, 'test-data', name));
       if (await file.exists()) {
         return new Response(file, { headers: { 'Content-Type': 'application/json' } });
       }
@@ -143,6 +147,13 @@ Bun.serve({
       const version = next.version as number;
       db.query(`INSERT INTO rulesets (id, version, status, jdm) VALUES (?, ?, ?, ?)`)
         .run(id, version, status, JSON.stringify(jdm));
+      // Pre-create decisions for faster subsequent evaluations
+      try {
+        await engine.createDecision(`${id}@${version}`);
+        await engine.createDecision(`${id}@latest`);
+      } catch (err) {
+        console.warn('Failed to pre-create decision', err);
+      }
       return new Response(JSON.stringify({ id, version, status }), {
         headers: { 'Content-Type': 'application/json' }
       });

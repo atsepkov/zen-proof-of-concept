@@ -1,5 +1,10 @@
 # dependencies (bun install)
 node_modules
+node/node_modules
+
+# python artifacts
+__pycache__
+python/__pycache__
 
 # output
 out

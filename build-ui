@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -e
+# Build shared frontend assets using Bun
+cd "$(dirname "$0")/node"
+bun install
+bun run build:ui
+
