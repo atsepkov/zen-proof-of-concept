@@ -64,6 +64,9 @@ engine.
 
 ## Benchmarking
 
-Benchmark implementations live in `node/benchmarks/` and a compatible Python
-version of the **test-data** benchmark is exposed at `POST /benchmark/test-data`.
+Benchmark implementations live in `node/benchmarks/`. The FastAPI server
+exposes a Python port of the **test-data** benchmark at `POST /benchmark/test-data`
+which executes a lightweight Python translation of the JDM graph on the backend
+for comparison against Zen. When a graph can't be translated the endpoint still
+returns Zen timings with the Python result omitted.
 

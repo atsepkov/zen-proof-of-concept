@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
-from typing import List, Any
+from typing import List, Any, Callable, Dict
 from pathlib import Path
 import sqlite3
 import json
@@ -151,6 +151,32 @@ async def analyze(body: dict):
             results.append({"error": str(e)})
     return results
 
+# -------- Benchmark helpers --------
+
+def build_py_handler(jdm: Dict[str, Any]) -> Callable[[Dict[str, Any]], Dict[str, Any]] | None:
+    """Build a minimal Python handler from a JDM description.
+
+    Currently only supports a direct edge from the input node to a single
+    output node (passthrough). If more complex constructs are detected the
+    function returns ``None`` signalling the caller to skip the Python
+    comparison.
+    """
+    nodes = {n['id']: n for n in jdm.get('nodes', [])}
+    edges = jdm.get('edges', [])
+    input_node = next((n for n in nodes.values() if n.get('type') == 'inputNode'), None)
+    output_nodes = [n for n in nodes.values() if n.get('type') == 'outputNode']
+    if not input_node or not output_nodes:
+        return None
+    if (
+        len(nodes) == 2
+        and len(output_nodes) == 1
+        and len(edges) == 1
+        and edges[0].get('sourceId') == input_node['id']
+        and edges[0].get('targetId') == output_nodes[0]['id']
+    ):
+        return lambda ctx: ctx
+    return None
+
 # -------- Benchmark --------
 @app.post('/benchmark/test-data')
 async def benchmark_test_data(body: dict):
@@ -162,19 +188,46 @@ async def benchmark_test_data(body: dict):
     jdm = json.loads(text)
     decision = engine.create_decision(jdm)
     decision.validate()
+    handler = build_py_handler(jdm)
+
     def clone(obj):
         return json.loads(json.dumps(obj))
+
+    py_outputs: List[Any] = []
+    py_time = 0.0
+    if handler:
+        start = time.perf_counter()
+        for p in parts:
+            py_outputs.append(handler(clone(p)))
+        py_time = (time.perf_counter() - start) * 1000
+
     start = time.perf_counter()
-    outputs = []
+    zen_outputs: List[Any] = []
     for p in parts:
         res = decision.evaluate(clone(p))
-        outputs.append(res.get('result') if isinstance(res, dict) else res)
+        zen_outputs.append(res.get('result') if isinstance(res, dict) else res)
     zen_time = (time.perf_counter() - start) * 1000
+
+    mismatch = None
+    if handler:
+        def stable(o):
+            if isinstance(o, list):
+                return [stable(v) for v in o]
+            if isinstance(o, dict):
+                return {k: stable(o[k]) for k in sorted(o.keys())}
+            return o
+        for idx, (a, b) in enumerate(zip(py_outputs, zen_outputs)):
+            if json.dumps(stable(a)) != json.dumps(stable(b)):
+                mismatch = {'index': idx, 'js': a, 'zen': b}
+                break
+    else:
+        mismatch = {'index': 0, 'js': None, 'zen': zen_outputs[0]}
+
     return {
-        'js': None,
+        'js': py_time,
         'zen': zen_time,
-        'sample': {'input': parts[0], 'js': None, 'zen': outputs[0]},
-        'mismatch': None
+        'sample': {'input': parts[0], 'js': py_outputs[0] if handler else None, 'zen': zen_outputs[0]},
+        'mismatch': mismatch
     }
 
 # -------- Static assets fallback --------
