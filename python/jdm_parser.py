@@ -66,14 +66,27 @@ def convert_js_ternary(expr: str) -> str:
     return parse(expr)
 
 
+def convert_js_ops(expr: str) -> str:
+    expr = re.sub(r"!==", "!=", expr)
+    expr = re.sub(r"===", "==", expr)
+    expr = re.sub(r"&&", " and ", expr)
+    expr = re.sub(r"\|\|", " or ", expr)
+    expr = re.sub(r"(?<![=!<>])!(?!=)", " not ", expr)
+    return expr
+
+
 def eval_with_ctx(expr: str, ctx: Dict[str, Any]) -> Any:
-    expr = convert_js_ternary(expr)
+    expr = convert_js_ops(convert_js_ternary(expr))
     ns = to_ns(ctx)
     env: Dict[str, Any] = {
         'sum': sum,
         'filter_': filter_,
         'map_': map_,
         'reduce_': reduce_,
+        'len': len,
+        'min': min,
+        'max': max,
+        'abs': abs,
     }
     env.update(vars(ns))
     # Unlike the Node implementation, Python evaluates expressions directly
