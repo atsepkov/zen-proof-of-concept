@@ -5,10 +5,8 @@ node_modules
 out
 dist
 *.tgz
-public/editor.js
-public/editor.css
-public/analyze.js
-public/analyze.css
+public/*.js
+public/*.css
 
 # code coverage
 coverage

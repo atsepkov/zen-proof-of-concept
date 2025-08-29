@@ -1,5 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { ZenEngine } from '@gorules/zen-engine';
+import { benchmarks } from './benchmarks';
+import { readdirSync } from 'fs';
 
 // Initialize SQLite database and schema
 const db = new Database('rules.db');
@@ -38,10 +40,13 @@ const loader = async (key: string) => {
 
 // Zen engine instance with loader pulling JDM from SQLite
 const engine = new ZenEngine({ loader });
-
 // HTTP server
 Bun.serve({
   port: 3000,
+  // Allow long-running benchmark requests
+  // bun types may not yet include this option
+  // @ts-expect-error
+  idleTimeout: 240,
   async fetch(req) {
     const url = new URL(req.url);
 
@@ -60,19 +65,67 @@ Bun.serve({
       }
     }
 
-    // Serve analyze assets
-    if (req.method === 'GET' && url.pathname === '/analyze') {
-      const file = Bun.file('public/analyze.html');
-      return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+      // Serve analyze assets
+      if (req.method === 'GET' && url.pathname === '/analyze') {
+        const file = Bun.file('public/analyze.html');
+        return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+      }
+
+      if (req.method === 'GET' && (url.pathname === '/analyze.js' || url.pathname === '/analyze.css')) {
+        const path = `public${url.pathname}`;
+        const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
+        const file = Bun.file(path);
+        if (await file.exists()) {
+          return new Response(file, { headers: { 'Content-Type': type } });
+        }
+      }
+
+      // Serve benchmark assets
+      if (req.method === 'GET' && url.pathname === '/benchmark') {
+        const file = Bun.file('public/benchmark.html');
+        return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+      }
+      if (req.method === 'GET' && url.pathname === '/benchmark-js') {
+        const file = Bun.file('public/benchmark-js.html');
+        return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+      }
+      if (req.method === 'GET' && url.pathname === '/benchmark-test-data') {
+        const file = Bun.file('public/benchmark-test-data.html');
+        return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+      }
+
+      if (
+        req.method === 'GET' &&
+        (url.pathname === '/benchmark.js' ||
+          url.pathname === '/benchmark.css' ||
+          url.pathname === '/benchmark-js.js' ||
+          url.pathname === '/benchmark-js.css' ||
+          url.pathname === '/benchmark-test-data.js' ||
+          url.pathname === '/benchmark-test-data.css')
+      ) {
+        const path = `public${url.pathname}`;
+        const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
+        const file = Bun.file(path);
+        if (await file.exists()) {
+          return new Response(file, { headers: { 'Content-Type': type } });
+        }
+      }
+
+    // List and serve test-data files
+    if (req.method === 'GET' && url.pathname === '/test-data') {
+      const files = readdirSync('test-data').filter((f) => f.endsWith('.json'));
+      return new Response(JSON.stringify(files), {
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    if (req.method === 'GET' && (url.pathname === '/analyze.js' || url.pathname === '/analyze.css')) {
-      const path = `public${url.pathname}`;
-      const type = url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript';
-      const file = Bun.file(path);
+    if (req.method === 'GET' && url.pathname.startsWith('/test-data/')) {
+      const name = decodeURIComponent(url.pathname.slice('/test-data/'.length));
+      const file = Bun.file(`test-data/${name}`);
       if (await file.exists()) {
-        return new Response(file, { headers: { 'Content-Type': type } });
+        return new Response(file, { headers: { 'Content-Type': 'application/json' } });
       }
+      return new Response('Not found', { status: 404 });
     }
 
     // Publish ruleset
@@ -133,10 +186,11 @@ Bun.serve({
         if (!key || !Array.isArray(parts)) {
           return new Response('key and parts are required', { status: 400 });
         }
-        const results = [] as any[];
+        const results: any[] = [];
+        const decision = await engine.getDecision(key);
         for (const part of parts) {
           try {
-            const res = await engine.evaluate(key, part);
+            const res = await decision.evaluate(part);
             results.push(res.result);
           } catch (err: any) {
             results.push({ error: err.message || String(err) });
@@ -147,6 +201,37 @@ Bun.serve({
         });
       } catch (err: any) {
         return new Response(String(err.message || err), { status: 500 });
+      }
+    }
+
+    // Performance benchmarks
+    if (req.method === 'POST' && url.pathname.startsWith('/benchmark/')) {
+      const name = url.pathname.split('/')[2];
+      const runner = benchmarks[name];
+      if (!runner) {
+        return new Response('benchmark not found', { status: 404 });
+      }
+      try {
+        const body = await req.json();
+        const parts = body.parts as any[];
+        const iterations = Number(body.iterations) || 1;
+        const propCount =
+          Number(body.propCount) || (parts[0] ? Object.keys(parts[0]).length : 0);
+        if (!Array.isArray(parts) || propCount === 0) {
+          return new Response(JSON.stringify({ error: 'parts are required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        const result = await runner(engine, parts, iterations, propCount, body);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message || String(err) }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
 
