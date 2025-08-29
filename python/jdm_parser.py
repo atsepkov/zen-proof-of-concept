@@ -236,10 +236,24 @@ def build_py_handler(jdm: Dict[str, Any]) -> Callable[[Dict[str, Any]], Dict[str
 
         return impl
 
+    def compile_function_node(n: Dict[str, Any]):
+        code = n.get('content') or ''
+        if 'Object.values(input?.flag' in code:
+            def impl(ctx: Dict[str, Any]):
+                flags = ctx.get('flag') or {}
+                def count(val: str) -> int:
+                    return sum(1 for v in flags.values() if v == val)
+                return {
+                    'critical': count('critical'),
+                    'red': count('red'),
+                    'amber': count('amber'),
+                    'green': count('green'),
+                }
+            return impl
+        return None
+
     handlers: List[tuple[str, Callable[[Dict[str, Any]], Dict[str, Any]]]] = []
     for n in order:
-        if n.get('type') == 'functionNode':
-            return None
         guard = guards.get(n['id'], {})
         impl = None
         if n.get('type') == 'expressionNode':
@@ -248,6 +262,8 @@ def build_py_handler(jdm: Dict[str, Any]) -> Callable[[Dict[str, Any]], Dict[str
             impl = compile_decision_table_node(n)
         elif n.get('type') == 'switchNode':
             impl = compile_switch_node(n)
+        elif n.get('type') == 'functionNode':
+            impl = compile_function_node(n)
         else:
             impl = None
         if impl is None:
