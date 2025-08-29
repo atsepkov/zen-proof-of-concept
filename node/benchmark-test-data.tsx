@@ -278,42 +278,52 @@ const App = () => {
       )}
       {results && (
         <div style={{ marginTop: '1rem' }}>
-          <p>JS: {results.js.toFixed(3)} ms</p>
-          <p>Zen: {results.zen.toFixed(3)} ms</p>
-          <h4>Sample Output</h4>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <div>
-              <h5>JS</h5>
-              <pre>
-                {results.sample.js !== null
-                  ? JSON.stringify(results.sample.js, null, 2)
-                  : 'N/A'}
-              </pre>
-            </div>
-            <div>
-              <h5>Zen</h5>
-              <pre>{JSON.stringify(results.sample.zen, null, 2)}</pre>
-            </div>
-          </div>
-          {results.mismatch ? (
-            <div style={{ marginTop: '1rem' }}>
-              <p style={{ color: 'red' }}>
-                Mismatch at index {results.mismatch.index}
-              </p>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <div>
-                  <h5>JS</h5>
-                  <pre>{JSON.stringify(results.mismatch.js, null, 2)}</pre>
+          {(() => {
+            const key = 'python' in results ? 'python' : 'js';
+            const label = key === 'python' ? 'Python' : 'JS';
+            return (
+              <>
+                <p>
+                  {label}: {(results as any)[key].toFixed(3)} ms
+                </p>
+                <p>Zen: {results.zen.toFixed(3)} ms</p>
+                <h4>Sample Output</h4>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div>
+                    <h5>{label}</h5>
+                    <pre>
+                      {(results.sample as any)[key] !== null
+                        ? JSON.stringify((results.sample as any)[key], null, 2)
+                        : 'N/A'}
+                    </pre>
+                  </div>
+                  <div>
+                    <h5>Zen</h5>
+                    <pre>{JSON.stringify(results.sample.zen, null, 2)}</pre>
+                  </div>
                 </div>
-                <div>
-                  <h5>Zen</h5>
-                  <pre>{JSON.stringify(results.mismatch.zen, null, 2)}</pre>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p>All outputs matched.</p>
-          )}
+                {results.mismatch ? (
+                  <div style={{ marginTop: '1rem' }}>
+                    <p style={{ color: 'red' }}>
+                      Mismatch at index {results.mismatch.index}
+                    </p>
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <div>
+                        <h5>{label}</h5>
+                        <pre>{JSON.stringify((results.mismatch as any)[key], null, 2)}</pre>
+                      </div>
+                      <div>
+                        <h5>Zen</h5>
+                        <pre>{JSON.stringify(results.mismatch.zen, null, 2)}</pre>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p>All outputs matched.</p>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>
