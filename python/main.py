@@ -7,7 +7,7 @@ import json
 import os
 import time
 from zen import ZenEngine
-from .jdm_parser import build_py_handler
+from jdm_parser import build_py_handler
 
 root = Path(__file__).resolve().parent.parent
 
