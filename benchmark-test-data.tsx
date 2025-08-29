@@ -36,6 +36,9 @@ const App = () => {
     const props = new Set<string>();
     const arrays = new Set<string>();
     const strings = new Set<string>();
+    const enums = new Map<string, any[]>();
+    const formats = new Map<string, string>();
+    const numberMins = new Map<string, number>();
     const src = JSON.stringify(jdm);
     const reserved = new Set([
       'true',
@@ -124,22 +127,65 @@ const App = () => {
             }
           }
         }
+      } else if (n.type === 'outputNode') {
+        const schemaStr = n.content?.schema;
+        if (typeof schemaStr === 'string') {
+          try {
+            const schema = JSON.parse(schemaStr);
+            const reqs: { path: string; schema: any }[] = [];
+            const walk = (sch: any, prefix = '') => {
+              if (sch && typeof sch === 'object' && sch.type === 'object') {
+                const required: string[] = sch.required || [];
+                for (const key of required) {
+                  const child = sch.properties?.[key];
+                  const p = prefix ? `${prefix}.${key}` : key;
+                  reqs.push({ path: p, schema: child });
+                  walk(child, p);
+                }
+              }
+            };
+            walk(schema);
+            let prefix = '';
+            const edge = (jdm.edges || []).find((e: any) => e.targetId === n.id);
+            const srcNode = jdm.nodes?.find((m: any) => m.id === edge?.sourceId);
+            if (srcNode && srcNode.type === 'inputNode' && typeof srcNode.name === 'string') {
+              prefix = srcNode.name;
+            }
+            for (const { path, schema: sch } of reqs) {
+              const full = prefix ? `${prefix}.${path}` : path;
+              props.add(full);
+              if (sch?.type === 'array') arrays.add(full);
+              if (sch?.type === 'string') strings.add(full);
+              if (Array.isArray(sch?.enum)) enums.set(full, sch.enum);
+              if (typeof sch?.minimum === 'number') numberMins.set(full, sch.minimum);
+              if (typeof sch?.format === 'string') formats.set(full, sch.format);
+            }
+          } catch {}
+        }
       }
     }
 
     const arr = Array.from({ length: count }, () => {
       const obj: any = {};
       for (const p of props) {
-        if (arrays.has(p)) {
+        if (enums.has(p)) {
+          const vals = enums.get(p)!;
+          setByPath(obj, p, vals[Math.floor(Math.random() * vals.length)]);
+        } else if (arrays.has(p)) {
           setByPath(
             obj,
             p,
             Array.from({ length: 5 }, () => Math.floor(Math.random() * 100))
           );
         } else if (strings.has(p)) {
-          setByPath(obj, p, Math.random().toString(36).slice(2, 8));
+          if (formats.get(p) === 'email') {
+            setByPath(obj, p, `user${Math.floor(Math.random() * 1000)}@example.com`);
+          } else {
+            setByPath(obj, p, Math.random().toString(36).slice(2, 8));
+          }
         } else {
-          setByPath(obj, p, Math.floor(Math.random() * 100));
+          const min = numberMins.get(p) ?? 0;
+          setByPath(obj, p, min + Math.floor(Math.random() * 100));
         }
       }
       return obj;
