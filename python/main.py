@@ -196,7 +196,10 @@ async def benchmark_test_data(body: dict):
     jdm = json.loads(text)
     decision = engine.create_decision(jdm)
     decision.validate()
-    handler = build_py_handler(jdm)
+    try:
+        handler = build_py_handler(jdm)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     def clone(obj):
         return json.loads(json.dumps(obj))
@@ -205,8 +208,11 @@ async def benchmark_test_data(body: dict):
     py_time = 0.0
     if handler:
         start = time.perf_counter()
-        for p in parts:
-            py_outputs.append(handler(clone(p)))
+        try:
+            for p in parts:
+                py_outputs.append(handler(clone(p)))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         py_time = (time.perf_counter() - start) * 1000
 
     start = time.perf_counter()
@@ -260,7 +266,10 @@ async def benchmark_user_jdm(body: dict):
     jdm = json.loads(jdm_bytes)
     decision = engine.create_decision(jdm)
     decision.validate()
-    handler = build_py_handler(jdm)
+    try:
+        handler = build_py_handler(jdm)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     def clone(obj):
         return json.loads(json.dumps(obj))
@@ -269,8 +278,11 @@ async def benchmark_user_jdm(body: dict):
     py_time = 0.0
     if handler:
         start = time.perf_counter()
-        for p in parts:
-            py_outputs.append(handler(clone(p)))
+        try:
+            for p in parts:
+                py_outputs.append(handler(clone(p)))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         py_time = (time.perf_counter() - start) * 1000
 
     start = time.perf_counter()

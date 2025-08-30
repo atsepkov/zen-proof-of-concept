@@ -287,6 +287,7 @@ export function buildJsHandler(jdm) {
       default:
         impl = async () => ({});
     }
+    if (!impl) return null;
     return async (ctx) => {
       for (const [sid, handle] of Object.entries(guard)) {
         if (ctx[`__switch_${sid}`] !== handle) return {};
