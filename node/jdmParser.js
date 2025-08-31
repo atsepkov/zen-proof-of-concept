@@ -118,15 +118,17 @@ export function buildJsHandler(jdm) {
         break;
       }
       case 'expressionNode': {
-        try {
-          const helpers = {
-            sum: (arr) => arr.reduce((a, b) => a + b, 0),
-            filter: (arr, fn) => arr.filter(fn),
-            map: (arr, fn) => arr.map(fn),
-            reduce: (arr, fn, init) => arr.reduce(fn, init),
-          };
-          const exps = n.content?.expressions || [];
-          const compiled = exps.map((e) => {
+        const helpers = {
+          sum: (arr) => arr.reduce((a, b) => a + b, 0),
+          filter: (arr, fn) => arr.filter(fn),
+          map: (arr, fn) => arr.map(fn),
+          reduce: (arr, fn, init) => arr.reduce(fn, init),
+        };
+        const exps = n.content?.expressions || [];
+        const compiled = [];
+        for (const e of exps) {
+          if (!e.key || !e.value) continue;
+          try {
             let val = typeof e.value === 'string' ? e.value : '';
             val = val.replace(/filter\(([^,]+),\s*([^()]+)\)/g, (_, arr, expr) =>
               `filter(${arr}, (item) => ${expr.replace(/#/g, 'item')})`
@@ -144,18 +146,18 @@ export function buildJsHandler(jdm) {
               'helpers',
               `with(helpers){ with(input){ return (${val}); } }`
             );
-            return { key: e.key, fn };
-          });
-          impl = async (ctx) => {
-            const result = {};
-            for (const { key, fn } of compiled) {
-              setByPath(result, key, fn(ctx, helpers));
-            }
-            return result;
-          };
-        } catch {
-          impl = null;
+            compiled.push({ key: e.key, fn });
+          } catch {
+            // skip invalid expression
+          }
         }
+        impl = async (ctx) => {
+          const result = {};
+          for (const { key, fn } of compiled) {
+            setByPath(result, key, fn(ctx, helpers));
+          }
+          return result;
+        };
         break;
       }
       case 'decisionTableNode': {
