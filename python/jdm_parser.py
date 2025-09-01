@@ -44,13 +44,22 @@ def reduce_(arr, fn, init):
     return functools.reduce(fn, arr, init)
 
 
+JS_OP_RE = re.compile(r"\?|&&|\|\||===|!==|(?<![=!<>])!(?!=)")
+
+
 def eval_with_ctx(expr: str, ctx: Dict[str, Any]) -> Any:
+    if JS_OP_RE.search(expr):
+        raise ValueError("JS-style expressions are not supported in Python handler")
     ns = to_ns(ctx)
     env: Dict[str, Any] = {
         'sum': sum,
         'filter_': filter_,
         'map_': map_,
         'reduce_': reduce_,
+        'len': len,
+        'min': min,
+        'max': max,
+        'abs': abs,
     }
     env.update(vars(ns))
     # Unlike the Node implementation, Python evaluates expressions directly
@@ -115,6 +124,8 @@ def build_py_handler(jdm: Dict[str, Any]) -> Callable[[Dict[str, Any]], Dict[str
         compiled = []
         for exp in exps:
             val = exp.get('value') or ''
+            if JS_OP_RE.search(val):
+                raise ValueError("JS-style expressions are not supported in Python handler")
             val = re.sub(r'filter\(([^,]+),\s*([^()]+)\)',
                           lambda m: f"filter_({m.group(1)}, lambda item: {m.group(2).replace('#', 'item')})",
                           val)
@@ -179,6 +190,8 @@ def build_py_handler(jdm: Dict[str, Any]) -> Callable[[Dict[str, Any]], Dict[str
             conds = []
             for inp in inputs:
                 raw = r.get(inp['id'])
+                if isinstance(raw, str) and JS_OP_RE.search(raw):
+                    raise ValueError("JS-style expressions are not supported in Python handler")
                 expr = parse_condition(raw, inp.get('field', ''))
                 if expr is None:
                     conds.append(None)
@@ -192,6 +205,8 @@ def build_py_handler(jdm: Dict[str, Any]) -> Callable[[Dict[str, Any]], Dict[str
                 val = r.get(out['id'])
                 if val is None:
                     continue
+                if isinstance(val, str) and JS_OP_RE.search(val):
+                    raise ValueError("JS-style expressions are not supported in Python handler")
                 try:
                     outs.append((out.get('field'), lambda ctx, _val=val: eval_with_ctx(_val, ctx)))
                 except Exception:
@@ -219,6 +234,8 @@ def build_py_handler(jdm: Dict[str, Any]) -> Callable[[Dict[str, Any]], Dict[str
         compiled = []
         for s in stmts:
             cond = s.get('condition') or ''
+            if cond and JS_OP_RE.search(cond):
+                raise ValueError("JS-style expressions are not supported in Python handler")
             if not cond:
                 fn = None
             else:

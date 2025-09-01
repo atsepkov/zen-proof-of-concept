@@ -31,8 +31,8 @@ files.
 - `GET /rules/<id>` – list versions for a rule with creation dates and status.
 - `GET /rules/<id>@<ver>` – fetch a rule by key such as `shipping@latest` or
   `shipping@42`.
-- `POST /benchmark/arbitrary-js` – current benchmark that measures native
-  JavaScript logic versus Zen Engine expression and decision table execution.
+- `POST /benchmark/user-jdm` – benchmark a user-created ruleset converted to
+  native logic versus Zen Engine execution.
 
 ## Running
 
