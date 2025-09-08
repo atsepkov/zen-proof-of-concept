@@ -17,6 +17,7 @@
   "dependencies": {
     "@gorules/jdm-editor": "^1.45.0",
     "@gorules/zen-engine": "^0.48.0",
+    "durable": "^2.0.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }

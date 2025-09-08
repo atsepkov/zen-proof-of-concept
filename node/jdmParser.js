@@ -317,3 +317,37 @@ export function buildJsHandler(jdm) {
   };
 }
 
+
+export async function buildDurableHandler(jdm) {
+  const jsHandler = buildJsHandler(jdm);
+  if (!jsHandler) return null;
+  let durable;
+  try {
+    durable = (await import('durable')).default;
+  } catch {
+    return null;
+  }
+  const name = 'r' + Math.random().toString(36).slice(2);
+  try {
+    durable.ruleset(name, function () {
+      whenAll: m => true
+      run: function (c) {
+        c.s.result = jsHandler(c.m);
+      }
+    });
+  } catch {
+    return null;
+  }
+  return async (input) => {
+    const sid = Math.random().toString(36).slice(2);
+    try {
+      await durable.post(name, { sid, ...input });
+      const state = durable.getState(name, sid);
+      durable.deleteState(name, sid);
+      return state.result;
+    } catch {
+      return null;
+    }
+  };
+}
+

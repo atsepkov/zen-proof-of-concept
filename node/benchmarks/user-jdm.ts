@@ -1,5 +1,5 @@
 import type { ZenEngine } from '@gorules/zen-engine';
-import { buildJsHandler } from '../jdmParser.js';
+import { buildJsHandler, buildDurableHandler } from '../jdmParser.js';
 
 export async function runBenchmark(
   engine: ZenEngine,
@@ -13,6 +13,7 @@ export async function runBenchmark(
   decision.validate();
 
   const jsHandler = buildJsHandler(jdm);
+  const durableHandler = await buildDurableHandler(jdm);
   const clone = (obj: any) => JSON.parse(JSON.stringify(obj));
 
   const jsOutputs: any[] = [];
@@ -28,6 +29,7 @@ export async function runBenchmark(
   }
 
   const zenOutputs: any[] = [];
+  const durableOutputs: any[] = [];
   let start = performance.now();
   for (const p of parts) {
     const res = await decision.evaluate(clone(p));
@@ -35,6 +37,17 @@ export async function runBenchmark(
   }
   let end = performance.now();
   const zenTime = end - start;
+
+  let durableTime = 0;
+  if (durableHandler) {
+    let dStart = performance.now();
+    for (const p of parts) {
+      const out = await durableHandler(clone(p));
+      durableOutputs.push(out);
+    }
+    let dEnd = performance.now();
+    durableTime = dEnd - dStart;
+  }
 
   let mismatch: any = null;
   if (jsHandler) {
@@ -50,22 +63,39 @@ export async function runBenchmark(
       return obj;
     };
     for (let i = 0; i < parts.length; i++) {
-      if (JSON.stringify(stable(jsOutputs[i])) !== JSON.stringify(stable(zenOutputs[i]))) {
-        mismatch = { index: i, js: jsOutputs[i], zen: zenOutputs[i] };
+      const j = JSON.stringify(stable(jsOutputs[i]));
+      const z = JSON.stringify(stable(zenOutputs[i]));
+      const d = durableHandler
+        ? JSON.stringify(stable(durableOutputs[i]))
+        : z;
+      if (j !== z || j !== d) {
+        mismatch = {
+          index: i,
+          js: jsOutputs[i],
+          zen: zenOutputs[i],
+          durable: durableHandler ? durableOutputs[i] : null
+        };
         break;
       }
     }
   } else {
-    mismatch = { index: 0, js: null, zen: zenOutputs[0] };
+    mismatch = {
+      index: 0,
+      js: null,
+      zen: zenOutputs[0],
+      durable: durableHandler ? durableOutputs[0] : null
+    };
   }
 
   return {
     js: jsTime,
     zen: zenTime,
+    durable: durableTime,
     sample: {
       input: parts[0],
       js: jsHandler ? jsOutputs[0] : null,
-      zen: zenOutputs[0]
+      zen: zenOutputs[0],
+      durable: durableHandler ? durableOutputs[0] : null
     },
     mismatch
   };
